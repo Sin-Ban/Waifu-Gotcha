@@ -2,7 +2,7 @@ import logging
 import random
 import asyncio
 from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMember
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMember, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatType
 from database import db
@@ -519,6 +519,22 @@ async def handle_trade_decline(query, context):
     """Handle trade decline"""
     await query.edit_message_text("❌ Trade declined!")
 
+async def setup_bot_commands(application):
+    """Set up bot commands menu"""
+    commands = [
+        BotCommand("start", "Start the bot and get welcome message"),
+        BotCommand("setmode", "[Admin] Set group mode (waifu/husbando)"),
+        BotCommand("setwaifulimit", "[Admin] Set message limit for drops"),
+        BotCommand("addchar", "Add new character to database"),
+        BotCommand("catch", "Catch a dropped character"),
+        BotCommand("mycollection", "View your character collection"),
+        BotCommand("search", "Search for characters by name or series"),
+        BotCommand("trade", "Trade character with another user"),
+    ]
+    
+    await application.bot.set_my_commands(commands)
+    print("✅ Bot commands menu configured")
+
 def main():
     """Main function to run the bot"""
     # Initialize database with sample characters
@@ -549,6 +565,12 @@ def main():
     
     print("🤖 Waifu/Husbando Collector Bot is starting...")
     print("🎌 Ready to collect waifus and husbandos!")
+    
+    # Set up bot commands menu
+    async def post_init(application):
+        await setup_bot_commands(application)
+    
+    application.post_init = post_init
     
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
