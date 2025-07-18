@@ -84,22 +84,28 @@ root/
 - `/search <query>` - Search for characters
 - `/trade <char_id> @user` - Trade character with another user
 
-## Recent Changes (January 2025)
+## Recent Changes (July 2025)
 
-### Major Architecture Overhaul
+### Advanced Visual Collection System
+- **Image-Based Character Drops**: Characters now drop with images and hidden names (❓❓❓)
+- **Name-Based Catching**: Players catch characters by typing names with fuzzy matching (70% similarity)
+- **7-Tier Rarity System**: Complete rarity levels with colored emojis (⚪🟢🔵🟣🟡🔴⭐)
+- **Enhanced Image Upload**: Support for image uploads with captions for character addition
+- **Smart Caption Processing**: Bot handles both `/addchar` commands and direct captions
+
+### Visual and UX Improvements
+- **Emoji Formatting**: Proper character display with 🍎 Name and 📚 Series emojis
+- **Mystery Gameplay**: Characters drop with hidden names creating guessing mechanics
+- **Rarity Visualization**: Each rarity level has distinct colored emoji representation
+- **Image Integration**: Full support for character images in drops and database storage
+- **Automatic Bot Commands**: Complete command menu system in Telegram interface
+
+### Previous Architecture (January 2025)
 - **Complete Database Restructure**: Migrated from gacha system to group-based collection
 - **New Collection Mechanics**: Implemented message-based character drops
 - **Group Management**: Added comprehensive group settings and admin controls
 - **Trading System**: Rebuilt trading with inline button interface
 - **Character Management**: Switched to OuraDB-style character database format
-
-### New Features Implemented
-- **Group Mode Configuration**: Waifu/husbando modes per group
-- **Character Drop System**: Configurable message limits for drops
-- **Catch Mechanics**: /catch command with ownership validation
-- **Search Functionality**: Character search by name or series
-- **Collection Display**: Paginated collection views with navigation
-- **Admin Permissions**: Proper admin validation for group settings
 
 ## External Dependencies
 
