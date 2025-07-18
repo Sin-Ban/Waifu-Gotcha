@@ -1,28 +1,16 @@
-#!/usr/bin/env python3
-"""
-Anime Waifu & Husbando Collector Bot
-Entry point for the Telegram bot
-"""
-
-import sys
-import os
-
-# Add src directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
-# Import all modules directly without relative imports
 import logging
+import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from database import db
-from gacha import gacha
-from trading import trading
-from utils import (
+from .database import db
+from .gacha import gacha
+from .trading import trading
+from .utils import (
     create_main_menu, create_inventory_navigation, create_trading_menu,
     create_trade_action_buttons, format_character_card, format_trade_info,
     paginate_list, get_help_text, format_coins
 )
-from config import BOT_TOKEN, DAILY_REWARD
+from .config import BOT_TOKEN, DAILY_REWARD
 
 # Enable logging
 logging.basicConfig(
@@ -116,7 +104,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         trade_id = int(data.split("_")[-1])
         await reject_trade(query, user_id, trade_id)
     elif data == "trade_help":
-        await show_trade_help(query, user_id)
+        await show_trade_help(query)
     elif data == "help":
         await query.edit_message_text(get_help_text(), reply_markup=create_main_menu())
 
@@ -161,193 +149,182 @@ async def handle_summon(query, user_id):
         await query.edit_message_text(message, reply_markup=create_main_menu())
 
 async def handle_multi_summon(query, user_id):
-    """Handle multi summon (5 characters)"""
-    characters, message = gacha.multi_summon(user_id)
+    """Handle multi-summon (5 characters)"""
+    characters, message = gacha.multi_summon(user_id, 5)
     
     if characters:
-        # Format multi summon results
-        result_text = f"✨ **MULTI SUMMON RESULTS** ✨\n\n{message}"
-        await query.edit_message_text(result_text, reply_markup=create_main_menu())
+        # Show summary first
+        await query.edit_message_text(message, reply_markup=create_main_menu())
+        
+        # Send individual character cards
+        for char in characters:
+            if char['image_url']:
+                try:
+                    await query.message.reply_photo(
+                        photo=char['image_url'],
+                        caption=format_character_card(char)
+                    )
+                except Exception:
+                    await query.message.reply_text(format_character_card(char))
+            else:
+                await query.message.reply_text(format_character_card(char))
     else:
         await query.edit_message_text(message, reply_markup=create_main_menu())
 
 async def show_inventory(query, user_id, page=0):
     """Show user's character inventory"""
+    per_page = 5
     characters = db.get_user_characters(user_id)
     
     if not characters:
         await query.edit_message_text(
-            "📝 **YOUR COLLECTION** 📝\n\nYou don't have any characters yet! Use the summon feature to get started.",
+            "📦 Your collection is empty!\n\n🎰 Use the summon feature to collect characters!",
             reply_markup=create_main_menu()
         )
         return
     
-    # Paginate characters
-    items_per_page = 5
-    paginated_data = paginate_list(characters, items_per_page, page)
+    total_pages = (len(characters) + per_page - 1) // per_page
+    page_characters = paginate_list(characters, page, per_page)
     
-    if not paginated_data['items']:
-        await query.edit_message_text(
-            "📝 **YOUR COLLECTION** 📝\n\nNo characters found on this page.",
-            reply_markup=create_main_menu()
-        )
-        return
+    inventory_text = f"📦 **YOUR COLLECTION** (Page {page + 1}/{total_pages})\n\n"
     
-    # Format character list
-    character_list = "📝 **YOUR COLLECTION** 📝\n\n"
-    for char in paginated_data['items']:
-        character_list += format_character_card(char) + "\n"
+    for i, char in enumerate(page_characters, 1):
+        inventory_text += f"**{(page * per_page) + i}.** {format_character_card(char, show_obtained=True)}\n\n"
     
-    # Add pagination info
-    character_list += f"\n📄 Page {page + 1} of {paginated_data['total_pages']}"
-    character_list += f"\n📊 Total Characters: {len(characters)}"
-    
-    # Create navigation buttons
-    keyboard = create_inventory_navigation(page, paginated_data['total_pages'])
-    
-    await query.edit_message_text(character_list, reply_markup=keyboard)
+    await query.edit_message_text(
+        inventory_text,
+        reply_markup=create_inventory_navigation(page, total_pages)
+    )
 
 async def show_stats(query, user_id):
     """Show user statistics"""
-    user_data = db.get_user(user_id)
-    characters = db.get_user_characters(user_id)
-    
-    # Calculate rarity counts
-    rarity_counts = {"Common": 0, "Uncommon": 0, "Rare": 0, "Epic": 0, "Legendary": 0}
-    total_value = 0
-    
-    for char in characters:
-        rarity = char['rarity']
-        rarity_counts[rarity] += 1
-        total_value += char.get('value', 0)
-    
-    stats_text = f"""
-📊 **YOUR STATS** 📊
-
-👤 **Player:** {query.from_user.first_name}
-💰 **Coins:** {format_coins(user_data['coins'])}
-🎲 **Total Summons:** {user_data['total_summons']}
-📚 **Collection Size:** {len(characters)}
-💎 **Collection Value:** {total_value}
-
-**📈 RARITY BREAKDOWN:**
-🟡 Legendary: {rarity_counts['Legendary']}
-🟣 Epic: {rarity_counts['Epic']}
-🔵 Rare: {rarity_counts['Rare']}
-🟢 Uncommon: {rarity_counts['Uncommon']}
-⚪ Common: {rarity_counts['Common']}
-
-**🏆 ACHIEVEMENTS:**
-{"🎯 First Character!" if len(characters) >= 1 else ""}
-{"🎪 Collector!" if len(characters) >= 10 else ""}
-{"🌟 Legendary Owner!" if rarity_counts['Legendary'] >= 1 else ""}
-{"💎 Epic Collection!" if len(characters) >= 25 else ""}
-"""
-    
+    stats_text = gacha.get_summon_statistics(user_id)
     await query.edit_message_text(stats_text, reply_markup=create_main_menu())
 
 async def claim_daily_reward(query, user_id):
     """Handle daily reward claim"""
-    success, message = db.claim_daily_reward(user_id)
-    
-    if success:
-        reward_text = f"""
+    if db.can_claim_daily_reward(user_id):
+        db.claim_daily_reward(user_id)
+        user_data = db.get_user(user_id)
+        
+        message = f"""
 🎁 **DAILY REWARD CLAIMED!** 🎁
 
-{message}
+You received {DAILY_REWARD} coins!
+💰 Current balance: {user_data['coins']} coins
 
 Come back tomorrow for another reward!
 """
     else:
-        reward_text = f"""
-⏰ **DAILY REWARD** ⏰
+        message = """
+⏰ **DAILY REWARD NOT READY** ⏰
 
-{message}
+You have already claimed your daily reward!
+Come back tomorrow for another reward!
 """
     
-    await query.edit_message_text(reward_text, reply_markup=create_main_menu())
+    await query.edit_message_text(message, reply_markup=create_main_menu())
 
 async def show_trading_menu(query, user_id):
     """Show trading menu"""
-    await query.edit_message_text(
-        "🔄 **TRADING MENU** 🔄\n\nTrade your characters with other players!",
-        reply_markup=create_trading_menu()
-    )
+    message = """
+🔄 **TRADING SYSTEM** 🔄
+
+Trade your characters with other users!
+
+**How to Trade:**
+1. Find another user who wants to trade
+2. Both users must know each other's character IDs
+3. Use the pending trades section to manage trades
+
+**Note:** Trading feature requires both users to be registered with the bot.
+"""
+    
+    await query.edit_message_text(message, reply_markup=create_trading_menu())
 
 async def show_pending_trades(query, user_id):
     """Show pending trades"""
     trades = trading.get_pending_trades(user_id)
     
     if not trades:
-        await query.edit_message_text(
-            "📋 **PENDING TRADES** 📋\n\nNo pending trades found.",
-            reply_markup=create_trading_menu()
-        )
+        message = """
+📋 **NO PENDING TRADES** 📋
+
+You have no pending trade requests.
+"""
+        await query.edit_message_text(message, reply_markup=create_trading_menu())
         return
     
-    trade_text = "📋 **PENDING TRADES** 📋\n\n"
-    for trade in trades:
-        trade_text += format_trade_info(trade) + "\n"
+    message = "📋 **PENDING TRADES** 📋\n\n"
+    for trade in trades[:5]:  # Show first 5 trades
+        message += format_trade_info(trade) + "\n"
+        
+        # Add action buttons for trades directed to this user
+        if trade['to_user_id'] == user_id:
+            await query.message.reply_text(
+                f"**Trade #{trade['id']}** - Action Required:",
+                reply_markup=create_trade_action_buttons(trade['id'])
+            )
     
-    await query.edit_message_text(trade_text, reply_markup=create_trading_menu())
+    await query.edit_message_text(message, reply_markup=create_trading_menu())
 
 async def show_trade_history(query, user_id):
     """Show trade history"""
     trades = trading.get_trade_history(user_id)
     
     if not trades:
-        await query.edit_message_text(
-            "📜 **TRADE HISTORY** 📜\n\nNo completed trades found.",
-            reply_markup=create_trading_menu()
-        )
-        return
+        message = """
+📚 **NO TRADE HISTORY** 📚
+
+You haven't completed any trades yet.
+"""
+    else:
+        message = "📚 **TRADE HISTORY** 📚\n\n"
+        for trade in trades:
+            status_emoji = "✅" if trade['status'] == 'accepted' else "❌"
+            message += f"{status_emoji} **Trade #{trade['id']}** - {trade['status'].title()}\n"
+            message += f"📅 {trade['completed_at'][:16]}\n\n"
     
-    history_text = "📜 **TRADE HISTORY** 📜\n\n"
-    for trade in trades[-10:]:  # Show last 10 trades
-        history_text += format_trade_info(trade) + "\n"
-    
-    await query.edit_message_text(history_text, reply_markup=create_trading_menu())
+    await query.edit_message_text(message, reply_markup=create_trading_menu())
 
 async def accept_trade(query, user_id, trade_id):
     """Accept a trade"""
     success, message = trading.accept_trade(trade_id, user_id)
     
     if success:
-        await query.edit_message_text(
-            f"✅ **TRADE ACCEPTED** ✅\n\n{message}",
-            reply_markup=create_trading_menu()
-        )
+        await query.edit_message_text(f"✅ {message}", reply_markup=create_trading_menu())
     else:
-        await query.edit_message_text(
-            f"❌ **TRADE FAILED** ❌\n\n{message}",
-            reply_markup=create_trading_menu()
-        )
+        await query.edit_message_text(f"❌ {message}", reply_markup=create_trading_menu())
 
 async def reject_trade(query, user_id, trade_id):
     """Reject a trade"""
     success, message = trading.reject_trade(trade_id, user_id)
     
-    await query.edit_message_text(
-        f"❌ **TRADE REJECTED** ❌\n\n{message}",
-        reply_markup=create_trading_menu()
-    )
+    if success:
+        await query.edit_message_text(f"❌ {message}", reply_markup=create_trading_menu())
+    else:
+        await query.edit_message_text(f"❌ {message}", reply_markup=create_trading_menu())
 
-async def show_trade_help(query, user_id):
+async def show_trade_help(query):
     """Show trading help"""
     help_text = """
-🔄 **TRADING HELP** 🔄
+❓ **HOW TO TRADE** ❓
 
-**How to Trade:**
-1. Find someone to trade with
-2. Agree on characters to exchange
-3. One person creates the trade proposal
-4. Other person accepts or rejects
+**Trading is currently simplified:**
+1. Both users need to be registered with the bot
+2. Users can view pending trades
+3. Accept or reject trade proposals
 
-**Trading Rules:**
-• You can only trade characters you own
-• Each trade must be fair (similar values)
-• Maximum 3 trades per day
-• Legendary characters are very valuable!
+**Future Features:**
+- Direct trading interface
+- Character browsing for trades
+- Trade value calculations
+- Trade notifications
+
+**Tips:**
+- Only trade characters you're willing to part with
+- Check character rarity before trading
+- Legendary characters are very valuable!
 """
     
     await query.edit_message_text(help_text, reply_markup=create_trading_menu())

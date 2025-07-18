@@ -11,19 +11,35 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Backend Architecture
-- **Python-based Telegram bot** using the `python-telegram-bot` library
+- **Python-based Telegram bot** using the `python-telegram-bot` library (version 21.9)
 - **SQLite database** for data persistence with thread-safe operations
-- **Modular design** with separate modules for different functionalities
+- **Modular design** with separate modules in `src/` folder
 - **Object-oriented approach** with dedicated classes for game systems
 
+### Project Structure
+```
+root/
+├── main.py              # Entry point that imports from src/
+├── src/                 # Source code folder
+│   ├── main.py         # Main bot handler with all commands
+│   ├── database.py     # Database layer and operations
+│   ├── gacha.py        # Character summoning system
+│   ├── trading.py      # Player trading system
+│   ├── utils.py        # UI helpers and formatting
+│   ├── config.py       # Bot configuration and settings
+│   └── characters.py   # Predefined character data
+├── anime_bot.db        # SQLite database file
+└── replit.md           # Project documentation
+```
+
 ### Core Components
-1. **Main Bot Handler** (`main.py`) - Handles Telegram interactions and command routing
-2. **Database Layer** (`database.py`) - Manages all data operations with SQLite
-3. **Gacha System** (`gacha.py`) - Implements the character summoning mechanics
-4. **Trading System** (`trading.py`) - Handles player-to-player character trading
-5. **Utilities** (`utils.py`) - Provides UI helpers and formatting functions
-6. **Configuration** (`config.py`) - Centralizes all bot settings and constants
-7. **Character Data** (`characters.py`) - Contains predefined anime character information
+1. **Main Bot Handler** (`src/main.py`) - Handles Telegram interactions and command routing
+2. **Database Layer** (`src/database.py`) - Manages all data operations with SQLite
+3. **Gacha System** (`src/gacha.py`) - Implements the character summoning mechanics
+4. **Trading System** (`src/trading.py`) - Handles player-to-player character trading
+5. **Utilities** (`src/utils.py`) - Provides UI helpers and formatting functions
+6. **Configuration** (`src/config.py`) - Centralizes all bot settings and constants
+7. **Character Data** (`src/characters.py`) - Contains predefined anime character information
 
 ## Key Components
 
