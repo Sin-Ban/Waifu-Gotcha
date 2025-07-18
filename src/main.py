@@ -215,8 +215,8 @@ async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rarity_info = RARITY_LEVELS[rarity]
     await update.message.reply_text(
         f"✅ Added {gender} character:\n"
-        f"📛 Name: {name}\n"
-        f"📺 Series: {series}\n"
+        f"🍎 Name: {name}\n"
+        f"📚 Series: {series}\n"
         f"✨ Rarity: {rarity_info['emoji']} {rarity}\n"
         f"🆔 ID: {character_id}"
     )
