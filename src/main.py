@@ -1,16 +1,12 @@
 import logging
-import os
-from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from .database import db
-from .gacha import gacha
-from .trading import trading
-from .utils import (
-    create_main_menu, create_inventory_navigation, create_trading_menu,
-    create_trade_action_buttons, format_character_card, format_trade_info,
-    paginate_list, get_help_text, format_coins
-)
-from .config import BOT_TOKEN, DAILY_REWARD
+import random
+import asyncio
+from datetime import datetime, timedelta
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMember
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.constants import ChatType
+from database import db
+from config import BOT_TOKEN, CATCH_TIMEOUT, VALID_GENDERS, TRADE_TIMEOUT
 
 # Enable logging
 logging.basicConfig(
@@ -19,337 +15,540 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Bot command handlers
+# Global state for active drops
+active_drops = {}
+
+def create_mode_keyboard():
+    """Create keyboard for switching modes"""
+    keyboard = [
+        [
+            InlineKeyboardButton("Switch to Waifu", callback_data="mode_waifu"),
+            InlineKeyboardButton("Switch to Husbando", callback_data="mode_husbando")
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def create_collection_keyboard(page=0, total_pages=1):
+    """Create keyboard for collection navigation"""
+    keyboard = []
+    
+    # Navigation buttons
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton("◀️ Prev", callback_data=f"collection_page_{page-1}"))
+    if page < total_pages - 1:
+        nav_buttons.append(InlineKeyboardButton("Next ▶️", callback_data=f"collection_page_{page+1}"))
+    
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def create_search_keyboard(results, page=0):
+    """Create keyboard for search results"""
+    keyboard = []
+    
+    # Add character buttons
+    start_idx = page * 5
+    end_idx = min(start_idx + 5, len(results))
+    
+    for i in range(start_idx, end_idx):
+        char = results[i]
+        keyboard.append([
+            InlineKeyboardButton(f"{char['name']} - {char['series_name']}", callback_data=f"search_view_{char['id']}")
+        ])
+    
+    # Navigation
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton("◀️ Prev", callback_data=f"search_page_{page-1}"))
+    if end_idx < len(results):
+        nav_buttons.append(InlineKeyboardButton("Next ▶️", callback_data=f"search_page_{page+1}"))
+    
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def create_trade_keyboard(trade_id):
+    """Create keyboard for trade requests"""
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Accept", callback_data=f"trade_accept_{trade_id}"),
+            InlineKeyboardButton("❌ Decline", callback_data=f"trade_decline_{trade_id}")
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> bool:
+    """Check if user is admin in the group"""
+    try:
+        chat_member = await context.bot.get_chat_member(update.effective_chat.id, user_id)
+        return chat_member.status in [ChatMember.ADMINISTRATOR, ChatMember.OWNER]
+    except Exception:
+        return False
+
+# COMMAND HANDLERS
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
-    user = update.effective_user
-    
-    # Register user in database
-    db.register_user(user.id, user.username, user.first_name)
-    
-    welcome_message = f"""
-🌟 **Welcome to Anime Waifu & Husbando Collector!** 🌟
+    if update.effective_chat.type == ChatType.PRIVATE:
+        await update.message.reply_text(
+            "🌟 Welcome to Waifu/Husbando Collector Bot!\n\n"
+            "Add me to a group to start collecting characters!\n\n"
+            "Commands:\n"
+            "/setmode <waifu/husbando> - Set group mode (admin only)\n"
+            "/setwaifulimit <number> - Set drop limit (admin only)\n"
+            "/addchar <name> | <series> | <waifu/husbando> - Add character\n"
+            "/catch - Catch a dropped character\n"
+            "/mycollection - View your collection\n"
+            "/search <query> - Search characters\n"
+            "/trade <char_id> @user - Trade with user"
+        )
+    else:
+        # Register group
+        db.register_group(update.effective_chat.id)
+        await update.message.reply_text(
+            "🎌 Waifu/Husbando Collector Bot activated!\n\n"
+            "Start chatting to make characters drop!"
+        )
 
-Hello {user.first_name}! 🎌
-
-Collect your favorite anime characters through our gacha system!
-✨ Start with 100 coins
-🎰 Each summon costs 10 coins
-🎁 Get daily rewards to earn more coins
-
-Use /menu to start collecting!
-"""
-    
-    await update.message.reply_text(welcome_message, reply_markup=create_main_menu())
-
-async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /menu command"""
-    user = update.effective_user
-    user_data = db.get_user(user.id)
-    
-    if not user_data:
-        await update.message.reply_text("Please use /start first to register!")
+async def set_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /setmode command"""
+    if update.effective_chat.type == ChatType.PRIVATE:
+        await update.message.reply_text("This command only works in groups!")
         return
     
-    menu_text = f"""
-🎮 **ANIME CHARACTER COLLECTOR** 🎮
-
-👤 **Player:** {user.first_name}
-💰 **Coins:** {user_data['coins']}
-🎲 **Total Summons:** {user_data['total_summons']}
-
-Choose an option below:
-"""
+    # Check if user is admin
+    if not await is_admin(update, context, update.effective_user.id):
+        await update.message.reply_text("❌ Only admins can change the group mode!")
+        return
     
-    await update.message.reply_text(menu_text, reply_markup=create_main_menu())
+    if not context.args:
+        await update.message.reply_text("Usage: /setmode <waifu/husbando>")
+        return
+    
+    mode = context.args[0].lower()
+    if mode not in VALID_GENDERS:
+        await update.message.reply_text("Mode must be 'waifu' or 'husbando'")
+        return
+    
+    db.set_group_mode(update.effective_chat.id, mode)
+    await update.message.reply_text(
+        f"✅ Group mode set to {mode.title()}!",
+        reply_markup=create_mode_keyboard()
+    )
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /help command"""
-    await update.message.reply_text(get_help_text())
+async def set_waifu_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /setwaifulimit command"""
+    if update.effective_chat.type == ChatType.PRIVATE:
+        await update.message.reply_text("This command only works in groups!")
+        return
+    
+    if not await is_admin(update, context, update.effective_user.id):
+        await update.message.reply_text("❌ Only admins can change the waifu limit!")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("Usage: /setwaifulimit <number>")
+        return
+    
+    try:
+        limit = int(context.args[0])
+        if limit < 1 or limit > 100:
+            await update.message.reply_text("Limit must be between 1 and 100")
+            return
+    except ValueError:
+        await update.message.reply_text("Please enter a valid number")
+        return
+    
+    db.set_waifu_limit(update.effective_chat.id, limit)
+    await update.message.reply_text(f"✅ Waifu limit set to {limit} messages!")
 
-# Callback query handlers
+async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /addchar command"""
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: /addchar <name> | <series> | <waifu/husbando>\n"
+            "Example: /addchar Zero Two | Darling in the FranXX | waifu"
+        )
+        return
+    
+    # Parse arguments
+    full_text = ' '.join(context.args)
+    parts = [part.strip() for part in full_text.split('|')]
+    
+    if len(parts) != 3:
+        await update.message.reply_text(
+            "Please use the format: name | series | waifu/husbando"
+        )
+        return
+    
+    name, series, gender = parts
+    gender = gender.lower()
+    
+    if gender not in VALID_GENDERS:
+        await update.message.reply_text("Gender must be 'waifu' or 'husbando'")
+        return
+    
+    # Check if message has photo
+    image_url = None
+    if update.message.photo:
+        # Get the largest photo
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+        image_url = file.file_path
+    
+    # Add character to database
+    character_id = db.add_character(name, series, image_url, gender, update.effective_user.id)
+    
+    await update.message.reply_text(
+        f"✅ Added {gender} character:\n"
+        f"📛 Name: {name}\n"
+        f"📺 Series: {series}\n"
+        f"🆔 ID: {character_id}"
+    )
+
+async def catch_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /catch command"""
+    if update.effective_chat.type == ChatType.PRIVATE:
+        await update.message.reply_text("This command only works in groups!")
+        return
+    
+    group_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    
+    # Check if there's an active drop
+    active_drop = db.get_active_drop(group_id)
+    if not active_drop:
+        await update.message.reply_text("❌ No character available to catch!")
+        return
+    
+    # Check if user already owns this character
+    if db.user_owns_character(user_id, active_drop['character_id']):
+        await update.message.reply_text(f"❌ You already own {active_drop['name']}!")
+        return
+    
+    # Claim the character
+    success = db.claim_character(user_id, active_drop['character_id'], group_id)
+    if success:
+        db.remove_active_drop(group_id)
+        await update.message.reply_text(
+            f"🎉 Congratulations {update.effective_user.first_name}!\n"
+            f"You caught {active_drop['name']} from {active_drop['series_name']}!"
+        )
+    else:
+        await update.message.reply_text("❌ Failed to catch character!")
+
+async def my_collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /mycollection command"""
+    user_id = update.effective_user.id
+    page = 0
+    
+    # Get collection
+    collection = db.get_user_collection(user_id, limit=5, offset=page * 5)
+    total_count = db.get_collection_count(user_id)
+    
+    if not collection:
+        await update.message.reply_text("📝 Your collection is empty! Start catching characters in groups!")
+        return
+    
+    # Format collection
+    text = f"📚 **{update.effective_user.first_name}'s Collection**\n\n"
+    text += f"Total characters: {total_count}\n\n"
+    
+    for char in collection:
+        text += f"🆔 {char['id']} - {char['name']}\n"
+        text += f"📺 {char['series_name']}\n"
+        text += f"🎭 {char['gender'].title()}\n\n"
+    
+    total_pages = (total_count + 4) // 5
+    text += f"📄 Page {page + 1}/{total_pages}"
+    
+    keyboard = create_collection_keyboard(page, total_pages)
+    
+    if update.message.photo:
+        # Send as photo caption
+        await update.message.reply_photo(
+            photo=collection[0]['image_url'] if collection[0]['image_url'] else 'https://via.placeholder.com/400x600/FF69B4/FFFFFF?text=No+Image',
+            caption=text,
+            reply_markup=keyboard
+        )
+    else:
+        await update.message.reply_text(text, reply_markup=keyboard)
+
+async def search_characters(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /search command"""
+    if not context.args:
+        await update.message.reply_text("Usage: /search <name or series>")
+        return
+    
+    query = ' '.join(context.args)
+    results = db.search_characters(query)
+    
+    if not results:
+        await update.message.reply_text(f"❌ No characters found matching '{query}'")
+        return
+    
+    # Format results
+    text = f"🔍 **Search Results for '{query}'**\n\n"
+    text += f"Found {len(results)} characters:\n\n"
+    
+    # Show first 5 results
+    for i, char in enumerate(results[:5]):
+        text += f"🆔 {char['id']} - {char['name']}\n"
+        text += f"📺 {char['series_name']}\n"
+        text += f"🎭 {char['gender'].title()}\n\n"
+    
+    keyboard = create_search_keyboard(results, 0)
+    
+    await update.message.reply_text(text, reply_markup=keyboard)
+
+async def trade_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /trade command"""
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "Usage: /trade <character_id> @username\n"
+            "Example: /trade 123 @friend"
+        )
+        return
+    
+    try:
+        char_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid character ID")
+        return
+    
+    # Get target user
+    target_username = context.args[1].replace('@', '')
+    
+    # Check if sender owns the character
+    if not db.user_owns_character(update.effective_user.id, char_id):
+        await update.message.reply_text("❌ You don't own this character!")
+        return
+    
+    # Get character info
+    character = db.get_character_by_id(char_id)
+    if not character:
+        await update.message.reply_text("❌ Character not found!")
+        return
+    
+    # For now, we'll store the trade request and let the target user accept via callback
+    await update.message.reply_text(
+        f"🔄 Trade request sent!\n"
+        f"Character: {character['name']} ({character['series_name']})\n"
+        f"Target: @{target_username}\n\n"
+        f"Waiting for @{target_username} to accept..."
+    )
+
+# MESSAGE HANDLERS
+async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle regular group messages for character drops"""
+    if update.effective_chat.type == ChatType.PRIVATE:
+        return
+    
+    group_id = update.effective_chat.id
+    
+    # Register group if not exists
+    group = db.get_group(group_id)
+    if not group:
+        db.register_group(group_id)
+        group = db.get_group(group_id)
+    
+    # Increment message count
+    db.increment_message_count(group_id)
+    
+    # Check if we should drop a character
+    if group['message_count'] >= group['waifu_limit']:
+        await drop_character(update, context, group)
+
+async def drop_character(update: Update, context: ContextTypes.DEFAULT_TYPE, group):
+    """Drop a character in the group"""
+    group_id = update.effective_chat.id
+    
+    # Get random character based on group mode
+    character = db.get_random_character(group['mode'])
+    if not character:
+        # No characters of this type available
+        return
+    
+    # Create drop
+    drop_id = db.create_drop(group_id, character['id'])
+    
+    # Reset message count
+    db.reset_message_count(group_id)
+    
+    # Send character drop message
+    text = f"🎉 A wild {group['mode']} appeared!\n\n"
+    text += f"📛 Name: {character['name']}\n"
+    text += f"📺 Series: {character['series_name']}\n"
+    text += f"🎭 Type: {character['gender'].title()}\n\n"
+    text += f"Type /catch to claim this character!\n"
+    text += f"⏰ {CATCH_TIMEOUT} seconds to catch!"
+    
+    if character['image_url']:
+        try:
+            message = await context.bot.send_photo(
+                chat_id=group_id,
+                photo=character['image_url'],
+                caption=text
+            )
+        except Exception:
+            # If image fails, send text
+            message = await context.bot.send_message(
+                chat_id=group_id,
+                text=text
+            )
+    else:
+        message = await context.bot.send_message(
+            chat_id=group_id,
+            text=text
+        )
+    
+    # Set timeout to remove drop if not caught
+    asyncio.create_task(drop_timeout(group_id, CATCH_TIMEOUT))
+
+async def drop_timeout(group_id: int, timeout: int):
+    """Handle drop timeout"""
+    await asyncio.sleep(timeout)
+    
+    # Check if drop still exists
+    active_drop = db.get_active_drop(group_id)
+    if active_drop:
+        db.remove_active_drop(group_id)
+        # Could send timeout message here if needed
+
+# CALLBACK HANDLERS
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle button callbacks"""
     query = update.callback_query
     await query.answer()
     
-    user_id = query.from_user.id
     data = query.data
     
-    if data == "main_menu":
-        await show_main_menu(query, user_id)
-    elif data == "summon":
-        await handle_summon(query, user_id)
-    elif data == "multi_summon":
-        await handle_multi_summon(query, user_id)
-    elif data == "inventory":
-        await show_inventory(query, user_id, page=0)
-    elif data.startswith("inventory_page_"):
-        page = int(data.split("_")[-1])
-        await show_inventory(query, user_id, page)
-    elif data == "stats":
-        await show_stats(query, user_id)
-    elif data == "daily_reward":
-        await claim_daily_reward(query, user_id)
-    elif data == "trading_menu":
-        await show_trading_menu(query, user_id)
-    elif data == "pending_trades":
-        await show_pending_trades(query, user_id)
-    elif data == "trade_history":
-        await show_trade_history(query, user_id)
-    elif data.startswith("accept_trade_"):
-        trade_id = int(data.split("_")[-1])
-        await accept_trade(query, user_id, trade_id)
-    elif data.startswith("reject_trade_"):
-        trade_id = int(data.split("_")[-1])
-        await reject_trade(query, user_id, trade_id)
-    elif data == "trade_help":
-        await show_trade_help(query)
-    elif data == "help":
-        await query.edit_message_text(get_help_text(), reply_markup=create_main_menu())
+    if data.startswith("mode_"):
+        await handle_mode_change(query, context)
+    elif data.startswith("collection_page_"):
+        await handle_collection_page(query, context)
+    elif data.startswith("search_page_"):
+        await handle_search_page(query, context)
+    elif data.startswith("search_view_"):
+        await handle_search_view(query, context)
+    elif data.startswith("trade_accept_"):
+        await handle_trade_accept(query, context)
+    elif data.startswith("trade_decline_"):
+        await handle_trade_decline(query, context)
 
-async def show_main_menu(query, user_id):
-    """Show main menu"""
-    user_data = db.get_user(user_id)
-    
-    menu_text = f"""
-🎮 **ANIME CHARACTER COLLECTOR** 🎮
-
-👤 **Player:** {query.from_user.first_name}
-💰 **Coins:** {user_data['coins']}
-🎲 **Total Summons:** {user_data['total_summons']}
-
-Choose an option below:
-"""
-    
-    await query.edit_message_text(menu_text, reply_markup=create_main_menu())
-
-async def handle_summon(query, user_id):
-    """Handle single summon"""
-    character, message = gacha.summon_character(user_id)
-    
-    if character:
-        # Send character image if available
-        if character['image_url']:
-            try:
-                await query.message.reply_photo(
-                    photo=character['image_url'],
-                    caption=message,
-                    reply_markup=create_main_menu()
-                )
-            except Exception as e:
-                # If image fails, send text message
-                await query.edit_message_text(
-                    f"{message}\n\n(Image could not be loaded)",
-                    reply_markup=create_main_menu()
-                )
-        else:
-            await query.edit_message_text(message, reply_markup=create_main_menu())
-    else:
-        await query.edit_message_text(message, reply_markup=create_main_menu())
-
-async def handle_multi_summon(query, user_id):
-    """Handle multi-summon (5 characters)"""
-    characters, message = gacha.multi_summon(user_id, 5)
-    
-    if characters:
-        # Show summary first
-        await query.edit_message_text(message, reply_markup=create_main_menu())
-        
-        # Send individual character cards
-        for char in characters:
-            if char['image_url']:
-                try:
-                    await query.message.reply_photo(
-                        photo=char['image_url'],
-                        caption=format_character_card(char)
-                    )
-                except Exception:
-                    await query.message.reply_text(format_character_card(char))
-            else:
-                await query.message.reply_text(format_character_card(char))
-    else:
-        await query.edit_message_text(message, reply_markup=create_main_menu())
-
-async def show_inventory(query, user_id, page=0):
-    """Show user's character inventory"""
-    per_page = 5
-    characters = db.get_user_characters(user_id)
-    
-    if not characters:
-        await query.edit_message_text(
-            "📦 Your collection is empty!\n\n🎰 Use the summon feature to collect characters!",
-            reply_markup=create_main_menu()
-        )
+async def handle_mode_change(query, context):
+    """Handle mode change button"""
+    if not await is_admin(query, context, query.from_user.id):
+        await query.edit_message_text("❌ Only admins can change the group mode!")
         return
     
-    total_pages = (len(characters) + per_page - 1) // per_page
-    page_characters = paginate_list(characters, page, per_page)
-    
-    inventory_text = f"📦 **YOUR COLLECTION** (Page {page + 1}/{total_pages})\n\n"
-    
-    for i, char in enumerate(page_characters, 1):
-        inventory_text += f"**{(page * per_page) + i}.** {format_character_card(char, show_obtained=True)}\n\n"
+    mode = query.data.split("_")[1]
+    db.set_group_mode(query.message.chat.id, mode)
     
     await query.edit_message_text(
-        inventory_text,
-        reply_markup=create_inventory_navigation(page, total_pages)
+        f"✅ Group mode changed to {mode.title()}!",
+        reply_markup=create_mode_keyboard()
     )
 
-async def show_stats(query, user_id):
-    """Show user statistics"""
-    stats_text = gacha.get_summon_statistics(user_id)
-    await query.edit_message_text(stats_text, reply_markup=create_main_menu())
-
-async def claim_daily_reward(query, user_id):
-    """Handle daily reward claim"""
-    if db.can_claim_daily_reward(user_id):
-        db.claim_daily_reward(user_id)
-        user_data = db.get_user(user_id)
-        
-        message = f"""
-🎁 **DAILY REWARD CLAIMED!** 🎁
-
-You received {DAILY_REWARD} coins!
-💰 Current balance: {user_data['coins']} coins
-
-Come back tomorrow for another reward!
-"""
-    else:
-        message = """
-⏰ **DAILY REWARD NOT READY** ⏰
-
-You have already claimed your daily reward!
-Come back tomorrow for another reward!
-"""
+async def handle_collection_page(query, context):
+    """Handle collection page navigation"""
+    page = int(query.data.split("_")[-1])
+    user_id = query.from_user.id
     
-    await query.edit_message_text(message, reply_markup=create_main_menu())
-
-async def show_trading_menu(query, user_id):
-    """Show trading menu"""
-    message = """
-🔄 **TRADING SYSTEM** 🔄
-
-Trade your characters with other users!
-
-**How to Trade:**
-1. Find another user who wants to trade
-2. Both users must know each other's character IDs
-3. Use the pending trades section to manage trades
-
-**Note:** Trading feature requires both users to be registered with the bot.
-"""
+    # Get collection
+    collection = db.get_user_collection(user_id, limit=5, offset=page * 5)
+    total_count = db.get_collection_count(user_id)
     
-    await query.edit_message_text(message, reply_markup=create_trading_menu())
-
-async def show_pending_trades(query, user_id):
-    """Show pending trades"""
-    trades = trading.get_pending_trades(user_id)
-    
-    if not trades:
-        message = """
-📋 **NO PENDING TRADES** 📋
-
-You have no pending trade requests.
-"""
-        await query.edit_message_text(message, reply_markup=create_trading_menu())
+    if not collection:
+        await query.edit_message_text("📝 Your collection is empty!")
         return
     
-    message = "📋 **PENDING TRADES** 📋\n\n"
-    for trade in trades[:5]:  # Show first 5 trades
-        message += format_trade_info(trade) + "\n"
-        
-        # Add action buttons for trades directed to this user
-        if trade['to_user_id'] == user_id:
-            await query.message.reply_text(
-                f"**Trade #{trade['id']}** - Action Required:",
-                reply_markup=create_trade_action_buttons(trade['id'])
+    # Format collection
+    text = f"📚 **{query.from_user.first_name}'s Collection**\n\n"
+    text += f"Total characters: {total_count}\n\n"
+    
+    for char in collection:
+        text += f"🆔 {char['id']} - {char['name']}\n"
+        text += f"📺 {char['series_name']}\n"
+        text += f"🎭 {char['gender'].title()}\n\n"
+    
+    total_pages = (total_count + 4) // 5
+    text += f"📄 Page {page + 1}/{total_pages}"
+    
+    keyboard = create_collection_keyboard(page, total_pages)
+    
+    await query.edit_message_text(text, reply_markup=keyboard)
+
+async def handle_search_page(query, context):
+    """Handle search page navigation"""
+    # This would need to store search results in context
+    await query.edit_message_text("Search pagination not implemented yet")
+
+async def handle_search_view(query, context):
+    """Handle search character view"""
+    char_id = int(query.data.split("_")[-1])
+    character = db.get_character_by_id(char_id)
+    
+    if not character:
+        await query.edit_message_text("❌ Character not found!")
+        return
+    
+    text = f"📛 **{character['name']}**\n\n"
+    text += f"📺 Series: {character['series_name']}\n"
+    text += f"🎭 Type: {character['gender'].title()}\n"
+    text += f"🆔 ID: {character['id']}\n"
+    
+    if character['image_url']:
+        try:
+            await query.message.reply_photo(
+                photo=character['image_url'],
+                caption=text
             )
-    
-    await query.edit_message_text(message, reply_markup=create_trading_menu())
-
-async def show_trade_history(query, user_id):
-    """Show trade history"""
-    trades = trading.get_trade_history(user_id)
-    
-    if not trades:
-        message = """
-📚 **NO TRADE HISTORY** 📚
-
-You haven't completed any trades yet.
-"""
+        except Exception:
+            await query.edit_message_text(text)
     else:
-        message = "📚 **TRADE HISTORY** 📚\n\n"
-        for trade in trades:
-            status_emoji = "✅" if trade['status'] == 'accepted' else "❌"
-            message += f"{status_emoji} **Trade #{trade['id']}** - {trade['status'].title()}\n"
-            message += f"📅 {trade['completed_at'][:16]}\n\n"
-    
-    await query.edit_message_text(message, reply_markup=create_trading_menu())
+        await query.edit_message_text(text)
 
-async def accept_trade(query, user_id, trade_id):
-    """Accept a trade"""
-    success, message = trading.accept_trade(trade_id, user_id)
-    
-    if success:
-        await query.edit_message_text(f"✅ {message}", reply_markup=create_trading_menu())
-    else:
-        await query.edit_message_text(f"❌ {message}", reply_markup=create_trading_menu())
+async def handle_trade_accept(query, context):
+    """Handle trade accept"""
+    await query.edit_message_text("✅ Trade accepted! (Implementation pending)")
 
-async def reject_trade(query, user_id, trade_id):
-    """Reject a trade"""
-    success, message = trading.reject_trade(trade_id, user_id)
-    
-    if success:
-        await query.edit_message_text(f"❌ {message}", reply_markup=create_trading_menu())
-    else:
-        await query.edit_message_text(f"❌ {message}", reply_markup=create_trading_menu())
-
-async def show_trade_help(query):
-    """Show trading help"""
-    help_text = """
-❓ **HOW TO TRADE** ❓
-
-**Trading is currently simplified:**
-1. Both users need to be registered with the bot
-2. Users can view pending trades
-3. Accept or reject trade proposals
-
-**Future Features:**
-- Direct trading interface
-- Character browsing for trades
-- Trade value calculations
-- Trade notifications
-
-**Tips:**
-- Only trade characters you're willing to part with
-- Check character rarity before trading
-- Legendary characters are very valuable!
-"""
-    
-    await query.edit_message_text(help_text, reply_markup=create_trading_menu())
+async def handle_trade_decline(query, context):
+    """Handle trade decline"""
+    await query.edit_message_text("❌ Trade declined!")
 
 def main():
     """Main function to run the bot"""
+    # Initialize database with sample characters
+    from characters import populate_characters
+    populate_characters()
+    
     # Create application
     application = Application.builder().token(BOT_TOKEN).build()
     
     # Add command handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("menu", menu))
-    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("setmode", set_mode))
+    application.add_handler(CommandHandler("setwaifulimit", set_waifu_limit))
+    application.add_handler(CommandHandler("addchar", add_character))
+    application.add_handler(CommandHandler("catch", catch_character))
+    application.add_handler(CommandHandler("mycollection", my_collection))
+    application.add_handler(CommandHandler("search", search_characters))
+    application.add_handler(CommandHandler("trade", trade_character))
+    
+    # Add message handler for group messages
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS,
+        handle_group_message
+    ))
     
     # Add callback query handler
     application.add_handler(CallbackQueryHandler(button_callback))
     
-    # Initialize database and populate characters
-    from characters import populate_characters
-    populate_characters()
-    
-    print("🤖 Anime Waifu & Husbando Collector Bot is starting...")
-    print(f"🔗 Bot should be accessible via Telegram")
-    print("📊 Database initialized with characters")
-    print("✅ Bot is ready to collect waifus and husbandos!")
+    print("🤖 Waifu/Husbando Collector Bot is starting...")
+    print("🎌 Ready to collect waifus and husbandos!")
     
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)

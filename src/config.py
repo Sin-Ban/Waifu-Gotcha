@@ -4,24 +4,24 @@ import os
 BOT_TOKEN = os.getenv("BOT_TOKEN", "your_bot_token_here")
 
 # Database configuration
-DATABASE_PATH = "anime_bot.db"
+DATABASE_PATH = "waifu_bot.db"
 
-# Game configuration
-INITIAL_COINS = 100
-SUMMON_COST = 10
-DAILY_REWARD = 50
-MAX_TRADES_PER_DAY = 3
+# Waifu/Husbando Bot Configuration
+DEFAULT_WAIFU_LIMIT = 10  # Default messages before character drop
+DEFAULT_GROUP_MODE = "waifu"  # Default group mode
+CATCH_TIMEOUT = 30  # Seconds to catch a character before timeout
 
-# Rarity system with weights (lower = rarer)
-RARITY_WEIGHTS = {
-    "Common": 50,
-    "Uncommon": 30,
-    "Rare": 15,
-    "Epic": 4,
-    "Legendary": 1
-}
+# Character drop settings
+MIN_MESSAGES_FOR_DROP = 5
+MAX_MESSAGES_FOR_DROP = 15
 
-# Rarity colors for display
+# Admin permissions
+REQUIRED_ADMIN_PERMISSIONS = ['can_change_info', 'can_delete_messages', 'can_restrict_members']
+
+# Character genders
+VALID_GENDERS = ['waifu', 'husbando']
+
+# Rarity system (for display purposes)
 RARITY_COLORS = {
     "Common": "⚪",
     "Uncommon": "🟢", 
@@ -30,11 +30,5 @@ RARITY_COLORS = {
     "Legendary": "🟡"
 }
 
-# Character multipliers for trading value
-RARITY_MULTIPLIERS = {
-    "Common": 1,
-    "Uncommon": 2,
-    "Rare": 5,
-    "Epic": 15,
-    "Legendary": 50
-}
+# Trading configuration
+TRADE_TIMEOUT = 300  # 5 minutes for trade to be accepted/declined

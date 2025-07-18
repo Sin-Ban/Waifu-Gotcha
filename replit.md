@@ -1,8 +1,8 @@
-# Anime Waifu & Husbando Collector Bot
+# Waifu/Husbando Collector Bot
 
 ## Overview
 
-This is a Telegram bot that implements an anime character collection game with a gacha system. Users can summon anime characters using coins, manage their collection, and trade with other players. The bot features a rarity-based character system with legendary, epic, rare, uncommon, and common characters from popular anime series.
+This is an advanced Telegram bot that implements a group-based anime character collection game with waifu/husbando mechanics. Users can collect characters that drop in groups, claim them with /catch commands, and trade with other players. The bot features group-specific modes (waifu/husbando), configurable drop rates, and a comprehensive trading system with inline UI.
 
 ## User Preferences
 
@@ -14,7 +14,8 @@ Preferred communication style: Simple, everyday language.
 - **Python-based Telegram bot** using the `python-telegram-bot` library (version 21.9)
 - **SQLite database** for data persistence with thread-safe operations
 - **Modular design** with separate modules in `src/` folder
-- **Object-oriented approach** with dedicated classes for game systems
+- **Group-based collection system** with configurable drop mechanics
+- **OuraDB-style character database** format
 
 ### Project Structure
 ```
@@ -23,88 +24,121 @@ root/
 ├── src/                 # Source code folder
 │   ├── main.py         # Main bot handler with all commands
 │   ├── database.py     # Database layer and operations
-│   ├── gacha.py        # Character summoning system
-│   ├── trading.py      # Player trading system
-│   ├── utils.py        # UI helpers and formatting
 │   ├── config.py       # Bot configuration and settings
 │   └── characters.py   # Predefined character data
-├── anime_bot.db        # SQLite database file
+├── waifu_bot.db        # SQLite database file
 └── replit.md           # Project documentation
 ```
 
 ### Core Components
 1. **Main Bot Handler** (`src/main.py`) - Handles Telegram interactions and command routing
 2. **Database Layer** (`src/database.py`) - Manages all data operations with SQLite
-3. **Gacha System** (`src/gacha.py`) - Implements the character summoning mechanics
-4. **Trading System** (`src/trading.py`) - Handles player-to-player character trading
-5. **Utilities** (`src/utils.py`) - Provides UI helpers and formatting functions
-6. **Configuration** (`src/config.py`) - Centralizes all bot settings and constants
-7. **Character Data** (`src/characters.py`) - Contains predefined anime character information
+3. **Configuration** (`src/config.py`) - Centralizes all bot settings and constants
+4. **Character Data** (`src/characters.py`) - Contains predefined anime character information
 
 ## Key Components
 
 ### Database Schema
-- **Users Table**: Stores user profiles, coins, and activity tracking
-- **Characters Table**: Contains all available anime characters with metadata
-- **User Characters Table**: Tracks character ownership (user inventory)
+- **Groups Table**: Stores group settings, modes, and drop configurations
+- **Characters Table**: Contains all available anime characters with OuraDB format
+- **User Collections Table**: Tracks character ownership per user
 - **Trades Table**: Manages trading transactions between users
+- **Active Drops Table**: Tracks characters currently available for catching
 
-### Gacha System
-- **Weighted Random Selection**: Characters have different probabilities based on rarity
-- **Rarity Tiers**: Common (50%), Uncommon (30%), Rare (15%), Epic (4%), Legendary (1%)
-- **Economy System**: Uses coin-based currency with daily rewards and summon costs
+### Group-Based System
+- **Group Modes**: Configurable waifu/husbando modes per group
+- **Drop Mechanics**: Message-based character drops with configurable limits
+- **Admin Controls**: Group admins can configure modes and drop rates
+- **Character Claiming**: Users claim characters with /catch command
 
 ### Trading System
-- **Character Value Calculation**: Based on rarity multipliers
-- **Trade Proposals**: Users can propose character exchanges
-- **Trade Management**: Accept/reject functionality with database tracking
+- **Character Trading**: Users can trade characters with each other
+- **Trade Proposals**: Interactive inline buttons for accepting/declining trades
+- **Trade Management**: Database tracking of trade status and completion
 
 ### User Interface
-- **Inline Keyboards**: Interactive buttons for navigation and actions
+- **Inline Keyboards**: Interactive buttons for mode switching and navigation
 - **Paginated Views**: Efficient display of large character collections
 - **Rich Formatting**: Character cards with emojis and structured information
+- **Group Integration**: Commands work seamlessly in group environments
 
 ## Data Flow
 
-1. **User Registration**: New users are automatically registered with initial coin balance
-2. **Character Summoning**: Users spend coins → system selects random character by rarity → character added to user inventory
-3. **Collection Management**: Users can view paginated inventory with character details
-4. **Trading Process**: User A proposes trade → User B receives notification → Accept/reject → Database updates both inventories
-5. **Daily Rewards**: Users claim daily coin bonuses with cooldown tracking
+1. **Group Registration**: Groups are automatically registered when bot is added
+2. **Character Drops**: After configured message count, random character drops
+3. **Character Claiming**: Users use /catch to claim dropped characters
+4. **Collection Management**: Users can view their collections with paginated display
+5. **Trading Process**: Users propose trades using character IDs and usernames
+
+## Bot Commands
+
+### Admin Commands (Group Admins Only)
+- `/setmode <waifu/husbando>` - Set group mode
+- `/setwaifulimit <number>` - Set message limit for drops
+
+### User Commands
+- `/start` - Initialize bot and show welcome message
+- `/addchar <name> | <series> | <waifu/husbando>` - Add new character
+- `/catch` - Catch a dropped character
+- `/mycollection` - View personal collection
+- `/search <query>` - Search for characters
+- `/trade <char_id> @user` - Trade character with another user
+
+## Recent Changes (January 2025)
+
+### Major Architecture Overhaul
+- **Complete Database Restructure**: Migrated from gacha system to group-based collection
+- **New Collection Mechanics**: Implemented message-based character drops
+- **Group Management**: Added comprehensive group settings and admin controls
+- **Trading System**: Rebuilt trading with inline button interface
+- **Character Management**: Switched to OuraDB-style character database format
+
+### New Features Implemented
+- **Group Mode Configuration**: Waifu/husbando modes per group
+- **Character Drop System**: Configurable message limits for drops
+- **Catch Mechanics**: /catch command with ownership validation
+- **Search Functionality**: Character search by name or series
+- **Collection Display**: Paginated collection views with navigation
+- **Admin Permissions**: Proper admin validation for group settings
 
 ## External Dependencies
 
 ### Core Libraries
 - `python-telegram-bot`: Telegram Bot API integration
 - `sqlite3`: Database operations (Python standard library)
-- `random`: Gacha probability calculations
+- `random`: Character drop probability calculations
 - `threading`: Thread-safe database operations
-- `datetime`: Time-based features (daily rewards, trade tracking)
+- `datetime`: Time-based features and tracking
+- `asyncio`: Asynchronous drop timeout handling
 
 ### Character Assets
-- **Image URLs**: Uses Pixabay links for character images
-- **Character Database**: Predefined list of anime characters from popular series (Naruto, Attack on Titan, Demon Slayer, etc.)
+- **Image URLs**: Uses Wikia links for character images
+- **Character Database**: Predefined list of 20 anime characters (10 waifus, 10 husbandos)
+- **Popular Series**: Includes characters from Demon Slayer, Attack on Titan, Naruto, My Hero Academia, etc.
 
 ## Deployment Strategy
 
 ### Environment Setup
 - **Bot Token**: Required environment variable `BOT_TOKEN`
-- **Database**: SQLite file (`anime_bot.db`) created automatically
+- **Database**: SQLite file (`waifu_bot.db`) created automatically
 - **Character Population**: Automatic initialization on first run
 
 ### Configuration Management
 - **Centralized Settings**: All game parameters in `config.py`
-- **Flexible Economy**: Adjustable coin rewards, summon costs, and rarity weights
-- **Easy Character Management**: Simple addition of new characters to the predefined list
+- **Flexible Drop System**: Adjustable message limits and timeouts
+- **Easy Character Management**: Simple addition of new characters
 
-### Scalability Considerations
-- **Thread-Safe Operations**: Database operations use threading locks
-- **Modular Design**: Easy to extend with new features
-- **Efficient Queries**: Optimized database operations for character lookups
+### Bot Features
+- **Group-Focused Design**: Optimized for group chat interactions
+- **Real-Time Drops**: Characters drop based on group activity
+- **Interactive UI**: Inline keyboards for better user experience
+- **Admin Controls**: Comprehensive group management features
 
-### Current Limitations
-- **Single Database File**: SQLite suitable for small to medium user bases
-- **No User Authentication**: Relies on Telegram user IDs
-- **Static Character Pool**: Characters are predefined rather than dynamically managed
+### Current Implementation Status
+- **Core Features**: Group modes, character drops, claiming system ✅
+- **Database**: Complete schema with all required tables ✅
+- **Commands**: All basic commands implemented ✅
+- **UI**: Inline keyboards for navigation ✅
+- **Character Data**: 20 sample characters loaded ✅
 
-The system is designed to be easily extensible, with clear separation of concerns and well-defined interfaces between components. The SQLite database provides simplicity for deployment while maintaining data integrity through proper transaction handling.
+The system is designed as a modern group-based character collection bot with emphasis on interactive gameplay and community features. The SQLite database provides simplicity for deployment while maintaining data integrity through proper transaction handling.
