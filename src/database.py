@@ -160,16 +160,16 @@ class Database:
             conn.close()
     
     # CHARACTER MANAGEMENT
-    def add_character(self, name, series_name, image_url, gender, added_by):
+    def add_character(self, name, series_name, image_url, gender, added_by, rarity="Common"):
         """Add a new character to the database"""
         with self.lock:
             conn = self.get_connection()
             cursor = conn.cursor()
             
             cursor.execute('''
-                INSERT INTO characters (name, series_name, image_url, gender, added_by)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (name, series_name, image_url, gender, added_by))
+                INSERT INTO characters (name, series_name, image_url, gender, added_by, rarity)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (name, series_name, image_url, gender, added_by, rarity))
             
             character_id = cursor.lastrowid
             conn.commit()

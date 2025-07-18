@@ -1,12 +1,13 @@
 import logging
 import random
 import asyncio
+import difflib
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMember, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatType
 from database import db
-from config import BOT_TOKEN, CATCH_TIMEOUT, VALID_GENDERS, TRADE_TIMEOUT
+from config import BOT_TOKEN, CATCH_TIMEOUT, VALID_GENDERS, TRADE_TIMEOUT, RARITY_LEVELS, VALID_RARITIES, DROP_TIMEOUT
 
 # Enable logging
 logging.basicConfig(
@@ -167,9 +168,11 @@ async def set_waifu_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /addchar command"""
     if not context.args:
+        rarity_list = " | ".join([f"{rarity} {RARITY_LEVELS[rarity]['emoji']}" for rarity in VALID_RARITIES])
         await update.message.reply_text(
-            "Usage: /addchar <name> | <series> | <waifu/husbando>\n"
-            "Example: /addchar Zero Two | Darling in the FranXX | waifu"
+            f"Usage: /addchar <name> | <series> | <waifu/husbando> | <rarity>\n"
+            f"Example: /addchar Zero Two | Darling in the FranXX | waifu | Legendary\n\n"
+            f"Available rarities:\n{rarity_list}"
         )
         return
     
@@ -177,17 +180,25 @@ async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     full_text = ' '.join(context.args)
     parts = [part.strip() for part in full_text.split('|')]
     
-    if len(parts) != 3:
+    if len(parts) not in [3, 4]:
         await update.message.reply_text(
-            "Please use the format: name | series | waifu/husbando"
+            "Please use the format: name | series | waifu/husbando | rarity (optional)"
         )
         return
     
-    name, series, gender = parts
+    name, series, gender = parts[:3]
+    rarity = parts[3] if len(parts) == 4 else "Common"
+    
     gender = gender.lower()
+    rarity = rarity.title()
     
     if gender not in VALID_GENDERS:
         await update.message.reply_text("Gender must be 'waifu' or 'husbando'")
+        return
+    
+    if rarity not in VALID_RARITIES:
+        rarity_list = " | ".join([f"{r} {RARITY_LEVELS[r]['emoji']}" for r in VALID_RARITIES])
+        await update.message.reply_text(f"Invalid rarity! Choose from:\n{rarity_list}")
         return
     
     # Check if message has photo
@@ -199,12 +210,14 @@ async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
         image_url = file.file_path
     
     # Add character to database
-    character_id = db.add_character(name, series, image_url, gender, update.effective_user.id)
+    character_id = db.add_character(name, series, image_url, gender, update.effective_user.id, rarity)
     
+    rarity_info = RARITY_LEVELS[rarity]
     await update.message.reply_text(
         f"✅ Added {gender} character:\n"
         f"📛 Name: {name}\n"
         f"📺 Series: {series}\n"
+        f"✨ Rarity: {rarity_info['emoji']} {rarity}\n"
         f"🆔 ID: {character_id}"
     )
 
@@ -232,9 +245,11 @@ async def catch_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     success = db.claim_character(user_id, active_drop['character_id'], group_id)
     if success:
         db.remove_active_drop(group_id)
+        rarity_info = RARITY_LEVELS.get(active_drop['rarity'], RARITY_LEVELS['Common'])
         await update.message.reply_text(
             f"🎉 Congratulations {update.effective_user.first_name}!\n"
-            f"You caught {active_drop['name']} from {active_drop['series_name']}!"
+            f"You caught {active_drop['name']} from {active_drop['series_name']}!\n"
+            f"✨ Rarity: {rarity_info['emoji']} {active_drop['rarity']}"
         )
     else:
         await update.message.reply_text("❌ Failed to catch character!")
@@ -342,17 +357,52 @@ async def trade_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # MESSAGE HANDLERS
 async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle regular group messages for character drops"""
+    """Handle regular group messages for character drops and name-based catching"""
     if update.effective_chat.type == ChatType.PRIVATE:
         return
     
     group_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    message_text = update.message.text.strip()
     
     # Register group if not exists
     group = db.get_group(group_id)
     if not group:
         db.register_group(group_id)
         group = db.get_group(group_id)
+    
+    # Check if there's an active drop and user is trying to catch by name
+    active_drop = db.get_active_drop(group_id)
+    if active_drop and len(message_text) > 2:
+        # Check if the message matches the character name
+        character_name = active_drop['name'].lower()
+        user_guess = message_text.lower()
+        
+        # Use fuzzy matching for name similarity
+        similarity = difflib.SequenceMatcher(None, character_name, user_guess).ratio()
+        
+        if similarity >= 0.7:  # 70% similarity threshold
+            # Check if user already owns this character
+            if db.user_owns_character(user_id, active_drop['character_id']):
+                await update.message.reply_text(f"❌ You already own {active_drop['name']}!")
+                return
+            
+            # Claim the character
+            success = db.claim_character(user_id, active_drop['character_id'], group_id)
+            if success:
+                db.remove_active_drop(group_id)
+                rarity_info = RARITY_LEVELS.get(active_drop['rarity'], RARITY_LEVELS['Common'])
+                
+                # Send catch success message
+                catch_text = f"🎉 **{update.effective_user.first_name}** caught **{active_drop['name']}**!\n\n"
+                catch_text += f"📛 Name: {active_drop['name']}\n"
+                catch_text += f"📺 Series: {active_drop['series_name']}\n"
+                catch_text += f"🎭 Type: {active_drop['gender'].title()}\n"
+                catch_text += f"✨ Rarity: {rarity_info['emoji']} {active_drop['rarity']}\n"
+                catch_text += f"👤 Owner: {update.effective_user.first_name}"
+                
+                await update.message.reply_text(catch_text)
+                return
     
     # Increment message count
     db.increment_message_count(group_id)
@@ -377,13 +427,17 @@ async def drop_character(update: Update, context: ContextTypes.DEFAULT_TYPE, gro
     # Reset message count
     db.reset_message_count(group_id)
     
+    # Get rarity info
+    rarity_info = RARITY_LEVELS.get(character['rarity'], RARITY_LEVELS['Common'])
+    
     # Send character drop message
     text = f"🎉 A wild {group['mode']} appeared!\n\n"
-    text += f"📛 Name: {character['name']}\n"
+    text += f"📛 Name: ❓❓❓\n"
     text += f"📺 Series: {character['series_name']}\n"
-    text += f"🎭 Type: {character['gender'].title()}\n\n"
-    text += f"Type /catch to claim this character!\n"
-    text += f"⏰ {CATCH_TIMEOUT} seconds to catch!"
+    text += f"🎭 Type: {character['gender'].title()}\n"
+    text += f"✨ Rarity: {rarity_info['emoji']} {character['rarity']}\n\n"
+    text += f"🔍 Type the character's name to catch them!\n"
+    text += f"⏰ {DROP_TIMEOUT} seconds to catch!"
     
     if character['image_url']:
         try:
@@ -405,7 +459,7 @@ async def drop_character(update: Update, context: ContextTypes.DEFAULT_TYPE, gro
         )
     
     # Set timeout to remove drop if not caught
-    asyncio.create_task(drop_timeout(group_id, CATCH_TIMEOUT))
+    asyncio.create_task(drop_timeout(group_id, DROP_TIMEOUT))
 
 async def drop_timeout(group_id: int, timeout: int):
     """Handle drop timeout"""
@@ -525,8 +579,8 @@ async def setup_bot_commands(application):
         BotCommand("start", "Start the bot and get welcome message"),
         BotCommand("setmode", "[Admin] Set group mode (waifu/husbando)"),
         BotCommand("setwaifulimit", "[Admin] Set message limit for drops"),
-        BotCommand("addchar", "Add new character to database"),
-        BotCommand("catch", "Catch a dropped character"),
+        BotCommand("addchar", "Add new character with rarity to database"),
+        BotCommand("catch", "Catch a dropped character (or type name)"),
         BotCommand("mycollection", "View your character collection"),
         BotCommand("search", "Search for characters by name or series"),
         BotCommand("trade", "Trade character with another user"),

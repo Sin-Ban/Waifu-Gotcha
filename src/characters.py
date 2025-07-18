@@ -160,9 +160,10 @@ def populate_characters():
                 series_name=char_data['series_name'],
                 image_url=char_data['image_url'],
                 gender=char_data['gender'],
-                added_by=0  # System added
+                added_by=0,  # System added
+                rarity=char_data['rarity']
             )
-            print(f"✅ Added {char_data['gender']}: {char_data['name']}")
+            print(f"✅ Added {char_data['gender']}: {char_data['name']} ({char_data['rarity']})")
     
     print(f"📊 Database populated with {len(SAMPLE_CHARACTERS)} characters")
 

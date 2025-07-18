@@ -21,7 +21,7 @@ REQUIRED_ADMIN_PERMISSIONS = ['can_change_info', 'can_delete_messages', 'can_res
 # Character genders
 VALID_GENDERS = ['waifu', 'husbando']
 
-# Rarity system (for display purposes)
+# Rarity system with colored emojis
 RARITY_COLORS = {
     "Common": "⚪",
     "Uncommon": "🟢", 
@@ -30,5 +30,23 @@ RARITY_COLORS = {
     "Legendary": "🟡"
 }
 
+# New rarity system with colored circle emojis
+RARITY_LEVELS = {
+    "Common": {"emoji": "⚪", "color": "White", "value": 1},
+    "Uncommon": {"emoji": "🟢", "color": "Green", "value": 2},
+    "Rare": {"emoji": "🔵", "color": "Blue", "value": 3},
+    "Epic": {"emoji": "🟣", "color": "Purple", "value": 4},
+    "Legendary": {"emoji": "🟡", "color": "Gold", "value": 5},
+    "Mythical": {"emoji": "🔴", "color": "Red", "value": 6},
+    "Divine": {"emoji": "⭐", "color": "Star", "value": 7}
+}
+
+# Valid rarity options for adding characters
+VALID_RARITIES = list(RARITY_LEVELS.keys())
+
 # Trading configuration
 TRADE_TIMEOUT = 300  # 5 minutes for trade to be accepted/declined
+
+# Character drop settings
+DROP_TIMEOUT = 60  # 60 seconds to catch a character
+CATCH_SIMILARITY_THRESHOLD = 0.8  # How similar the name needs to be
