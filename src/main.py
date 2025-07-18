@@ -447,7 +447,12 @@ async def drop_character(update: Update, context: ContextTypes.DEFAULT_TYPE, gro
     # Get random character based on group mode
     character = db.get_random_character(group['mode'])
     if not character:
-        # No characters of this type available
+        # No user-added characters of this type available
+        await context.bot.send_message(
+            chat_id=group_id,
+            text=f"❌ No {group['mode']} characters have been added to the database yet!\n"
+                 f"Use `/addchar` or send an image with character details to add some characters first."
+        )
         return
     
     # Create drop

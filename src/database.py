@@ -189,12 +189,12 @@ class Database:
             return dict(character) if character else None
     
     def get_random_character(self, gender):
-        """Get random character by gender"""
+        """Get random character by gender (only user-added characters)"""
         with self.lock:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("SELECT * FROM characters WHERE gender = ? ORDER BY RANDOM() LIMIT 1", (gender,))
+            cursor.execute("SELECT * FROM characters WHERE gender = ? AND added_by != 0 ORDER BY RANDOM() LIMIT 1", (gender,))
             character = cursor.fetchone()
             
             conn.close()

@@ -148,24 +148,9 @@ SAMPLE_CHARACTERS = [
 ]
 
 def populate_characters():
-    """Populate the database with sample characters"""
-    print("🎭 Populating character database...")
-    
-    for char_data in SAMPLE_CHARACTERS:
-        # Check if character already exists
-        existing = db.search_characters(char_data['name'], limit=1)
-        if not existing:
-            db.add_character(
-                name=char_data['name'],
-                series_name=char_data['series_name'],
-                image_url=char_data['image_url'],
-                gender=char_data['gender'],
-                added_by=0,  # System added
-                rarity=char_data['rarity']
-            )
-            print(f"✅ Added {char_data['gender']}: {char_data['name']} ({char_data['rarity']})")
-    
-    print(f"📊 Database populated with {len(SAMPLE_CHARACTERS)} characters")
+    """Initialize character database (no longer auto-populates sample characters)"""
+    print("🎭 Character database initialized - ready for user-added characters!")
+    print("📊 Only characters added by users will appear in drops")
 
 if __name__ == "__main__":
     populate_characters()
