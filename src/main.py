@@ -167,27 +167,64 @@ async def set_waifu_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /addchar command"""
-    if not context.args:
+    # Check if this is a photo message with caption
+    if update.message.photo and update.message.caption:
+        # Parse caption as addchar command
+        caption = update.message.caption.strip()
+        if caption.startswith('/addchar'):
+            # Remove /addchar and parse the rest
+            full_text = caption[8:].strip()  # Remove '/addchar'
+        else:
+            full_text = caption
+        
+        parts = [part.strip() for part in full_text.split('|')]
+        
+        if len(parts) not in [3, 4]:
+            await update.message.reply_text(
+                "Please use the format: name | series | waifu/husbando | rarity (optional)"
+            )
+            return
+        
+        name, series, gender = parts[:3]
+        rarity = parts[3] if len(parts) == 4 else "Common"
+        
+        # Get the largest photo
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+        image_url = file.file_path
+        
+    elif context.args:
+        # Parse arguments from command
+        full_text = ' '.join(context.args)
+        parts = [part.strip() for part in full_text.split('|')]
+        
+        if len(parts) not in [3, 4]:
+            await update.message.reply_text(
+                "Please use the format: name | series | waifu/husbando | rarity (optional)"
+            )
+            return
+        
+        name, series, gender = parts[:3]
+        rarity = parts[3] if len(parts) == 4 else "Common"
+        
+        # Check if message has photo
+        image_url = None
+        if update.message.photo:
+            # Get the largest photo
+            photo = update.message.photo[-1]
+            file = await context.bot.get_file(photo.file_id)
+            image_url = file.file_path
+    else:
+        # Show help message
         rarity_list = " | ".join([f"{rarity} {RARITY_LEVELS[rarity]['emoji']}" for rarity in VALID_RARITIES])
         await update.message.reply_text(
             f"Usage: /addchar <name> | <series> | <waifu/husbando> | <rarity>\n"
             f"Example: /addchar Zero Two | Darling in the FranXX | waifu | Legendary\n\n"
+            f"**Or send an image with caption:**\n"
+            f"<name> | <series> | <waifu/husbando> | <rarity>\n\n"
             f"Available rarities:\n{rarity_list}"
         )
         return
-    
-    # Parse arguments
-    full_text = ' '.join(context.args)
-    parts = [part.strip() for part in full_text.split('|')]
-    
-    if len(parts) not in [3, 4]:
-        await update.message.reply_text(
-            "Please use the format: name | series | waifu/husbando | rarity (optional)"
-        )
-        return
-    
-    name, series, gender = parts[:3]
-    rarity = parts[3] if len(parts) == 4 else "Common"
     
     gender = gender.lower()
     rarity = rarity.title()
@@ -200,14 +237,6 @@ async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rarity_list = " | ".join([f"{r} {RARITY_LEVELS[r]['emoji']}" for r in VALID_RARITIES])
         await update.message.reply_text(f"Invalid rarity! Choose from:\n{rarity_list}")
         return
-    
-    # Check if message has photo
-    image_url = None
-    if update.message.photo:
-        # Get the largest photo
-        photo = update.message.photo[-1]
-        file = await context.bot.get_file(photo.file_id)
-        image_url = file.file_path
     
     # Add character to database
     character_id = db.add_character(name, series, image_url, gender, update.effective_user.id, rarity)
@@ -612,6 +641,12 @@ def main():
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS,
         handle_group_message
+    ))
+    
+    # Add message handler for photo messages with captions
+    application.add_handler(MessageHandler(
+        filters.PHOTO & filters.CAPTION,
+        add_character
     ))
     
     # Add callback query handler
