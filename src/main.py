@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMem
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatType
 from database import db
-from config import BOT_TOKEN, CATCH_TIMEOUT, VALID_GENDERS, TRADE_TIMEOUT, RARITY_LEVELS, VALID_RARITIES, DROP_TIMEOUT
+from config import BOT_TOKEN, CATCH_TIMEOUT, VALID_GENDERS, TRADE_TIMEOUT, RARITY_LEVELS, VALID_RARITIES, DROP_TIMEOUT, SPECIAL_USERS
 
 # Enable logging
 logging.basicConfig(
@@ -165,6 +165,21 @@ async def set_waifu_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.set_waifu_limit(update.effective_chat.id, limit)
     await update.message.reply_text(f"✅ Waifu limit set to {limit} messages!")
 
+async def giveme_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Give all characters to special users"""
+    user_id = update.effective_user.id
+    
+    if user_id not in SPECIAL_USERS:
+        await update.message.reply_text("❌ You don't have permission to use this command!")
+        return
+    
+    # Give all characters to the user
+    db.give_all_characters_to_user(user_id)
+    
+    await update.message.reply_text(
+        f"🎉 All characters have been added to {update.effective_user.first_name}'s collection!"
+    )
+
 async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /addchar command"""
     # Check if this is a photo message with caption
@@ -265,21 +280,22 @@ async def catch_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ No character available to catch!")
         return
     
-    # Check if user already owns this character
-    if db.user_owns_character(user_id, active_drop['character_id']):
-        await update.message.reply_text(f"❌ You already own {active_drop['name']}!")
-        return
-    
     # Claim the character
-    success = db.claim_character(user_id, active_drop['character_id'], group_id)
-    if success:
+    new_count = db.claim_character(user_id, active_drop['character_id'], group_id)
+    if new_count:
         db.remove_active_drop(group_id)
         rarity_info = RARITY_LEVELS.get(active_drop['rarity'], RARITY_LEVELS['Common'])
-        await update.message.reply_text(
-            f"🎉 Congratulations {update.effective_user.first_name}!\n"
-            f"You caught {active_drop['name']} from {active_drop['series_name']}!\n"
-            f"✨ Rarity: {rarity_info['emoji']} {active_drop['rarity']}"
-        )
+        
+        catch_text = f"🎉 Congratulations {update.effective_user.first_name}!\n"
+        catch_text += f"You caught {active_drop['name']} from {active_drop['series_name']}!\n"
+        catch_text += f"✨ Rarity: {rarity_info['emoji']} {active_drop['rarity']}\n"
+        
+        if new_count > 1:
+            catch_text += f"🔢 Count: {new_count} (duplicate caught!)"
+        else:
+            catch_text += f"🔢 Count: {new_count} (first time!)"
+        
+        await update.message.reply_text(catch_text)
     else:
         await update.message.reply_text("❌ Failed to catch character!")
 
@@ -290,22 +306,26 @@ async def my_collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Get collection
     collection = db.get_user_collection(user_id, limit=5, offset=page * 5)
-    total_count = db.get_collection_count(user_id)
+    count_info = db.get_collection_count(user_id)
     
     if not collection:
         await update.message.reply_text("📝 Your collection is empty! Start catching characters in groups!")
         return
     
     # Format collection
-    text = f"📚 **{update.effective_user.first_name}'s Collection**\n\n"
-    text += f"Total characters: {total_count}\n\n"
+    text = f"📚 **{update.effective_user.first_name}'s Harem**\n\n"
+    text += f"👥 Unique characters: {count_info['unique']}\n"
+    text += f"🎯 Total catches: {count_info['total']}\n\n"
     
     for char in collection:
+        rarity_info = RARITY_LEVELS.get(char['rarity'], RARITY_LEVELS['Common'])
         text += f"🆔 {char['id']} - {char['name']}\n"
-        text += f"📺 {char['series_name']}\n"
-        text += f"🎭 {char['gender'].title()}\n\n"
+        text += f"📚 {char['series_name']}\n"
+        text += f"🎭 {char['gender'].title()}\n"
+        text += f"✨ {rarity_info['emoji']} {char['rarity']}\n"
+        text += f"🔢 Count: {char['count']}\n\n"
     
-    total_pages = (total_count + 4) // 5
+    total_pages = (count_info['unique'] + 4) // 5
     text += f"📄 Page {page + 1}/{total_pages}"
     
     keyboard = create_collection_keyboard(page, total_pages)
@@ -411,30 +431,36 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
         similarity = difflib.SequenceMatcher(None, character_name, user_guess).ratio()
         
         if similarity >= 0.7:  # 70% similarity threshold
-            # Check if user already owns this character
-            if db.user_owns_character(user_id, active_drop['character_id']):
-                await update.message.reply_text(f"❌ You already own {active_drop['name']}!")
-                return
-            
             # Claim the character
-            success = db.claim_character(user_id, active_drop['character_id'], group_id)
-            if success:
+            new_count = db.claim_character(user_id, active_drop['character_id'], group_id)
+            if new_count:
                 db.remove_active_drop(group_id)
                 rarity_info = RARITY_LEVELS.get(active_drop['rarity'], RARITY_LEVELS['Common'])
                 
                 # Send catch success message
                 catch_text = f"🎉 **{update.effective_user.first_name}** caught **{active_drop['name']}**!\n\n"
-                catch_text += f"📛 Name: {active_drop['name']}\n"
-                catch_text += f"📺 Series: {active_drop['series_name']}\n"
+                catch_text += f"🍎 Name: {active_drop['name']}\n"
+                catch_text += f"📚 Series: {active_drop['series_name']}\n"
                 catch_text += f"🎭 Type: {active_drop['gender'].title()}\n"
                 catch_text += f"✨ Rarity: {rarity_info['emoji']} {active_drop['rarity']}\n"
-                catch_text += f"👤 Owner: {update.effective_user.first_name}"
+                catch_text += f"👤 Owner: {update.effective_user.first_name}\n"
+                
+                if new_count > 1:
+                    catch_text += f"🔢 Count: {new_count} (duplicate caught!)"
+                else:
+                    catch_text += f"🔢 Count: {new_count} (first time!)"
                 
                 await update.message.reply_text(catch_text)
                 return
     
     # Increment message count
     db.increment_message_count(group_id)
+    
+    # Get updated group info to check message count
+    group = db.get_group(group_id)
+    
+    # Debug logging
+    print(f"Group {group_id}: message count = {group['message_count']}, limit = {group['waifu_limit']}")
     
     # Check if we should drop a character
     if group['message_count'] >= group['waifu_limit']:
@@ -614,6 +640,7 @@ async def setup_bot_commands(application):
         BotCommand("setmode", "[Admin] Set group mode (waifu/husbando)"),
         BotCommand("setwaifulimit", "[Admin] Set message limit for drops"),
         BotCommand("addchar", "Add new character with rarity to database"),
+        BotCommand("giveme", "[Special] Get all characters in collection"),
         BotCommand("catch", "Catch a dropped character (or type name)"),
         BotCommand("mycollection", "View your character collection"),
         BotCommand("search", "Search for characters by name or series"),
@@ -637,6 +664,7 @@ def main():
     application.add_handler(CommandHandler("setmode", set_mode))
     application.add_handler(CommandHandler("setwaifulimit", set_waifu_limit))
     application.add_handler(CommandHandler("addchar", add_character))
+    application.add_handler(CommandHandler("giveme", giveme_all))
     application.add_handler(CommandHandler("catch", catch_character))
     application.add_handler(CommandHandler("mycollection", my_collection))
     application.add_handler(CommandHandler("search", search_characters))

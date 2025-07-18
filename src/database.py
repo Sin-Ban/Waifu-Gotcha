@@ -47,14 +47,16 @@ class Database:
                 )
             ''')
             
-            # User collections - claimed characters
+            # User collections - claimed characters with counts
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_collections (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
                     character_id INTEGER NOT NULL,
                     group_id INTEGER NOT NULL,
-                    claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    count INTEGER DEFAULT 1,
+                    first_claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (character_id) REFERENCES characters (id),
                     UNIQUE(user_id, character_id)
                 )
@@ -218,36 +220,51 @@ class Database:
     
     # COLLECTION MANAGEMENT
     def claim_character(self, user_id, character_id, group_id):
-        """Claim a character for a user"""
+        """Claim a character for a user (allows duplicates with count increment)"""
         with self.lock:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            try:
+            # Check if user already has this character
+            cursor.execute('''
+                SELECT count FROM user_collections 
+                WHERE user_id = ? AND character_id = ?
+            ''', (user_id, character_id))
+            
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Increment count for existing character
                 cursor.execute('''
-                    INSERT INTO user_collections (user_id, character_id, group_id)
-                    VALUES (?, ?, ?)
+                    UPDATE user_collections 
+                    SET count = count + 1, last_claimed_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ? AND character_id = ?
+                ''', (user_id, character_id))
+                new_count = existing[0] + 1
+            else:
+                # Add new character to collection
+                cursor.execute('''
+                    INSERT INTO user_collections (user_id, character_id, group_id, count)
+                    VALUES (?, ?, ?, 1)
                 ''', (user_id, character_id, group_id))
-                
-                conn.commit()
-                conn.close()
-                return True
-            except sqlite3.IntegrityError:
-                conn.close()
-                return False  # Character already claimed by this user
+                new_count = 1
+            
+            conn.commit()
+            conn.close()
+            return new_count
     
     def get_user_collection(self, user_id, limit=None, offset=0):
-        """Get user's character collection"""
+        """Get user's character collection with counts"""
         with self.lock:
             conn = self.get_connection()
             cursor = conn.cursor()
             
             query = '''
-                SELECT uc.id as collection_id, c.*, uc.claimed_at
+                SELECT uc.id as collection_id, c.*, uc.count, uc.first_claimed_at, uc.last_claimed_at
                 FROM user_collections uc
                 JOIN characters c ON uc.character_id = c.id
                 WHERE uc.user_id = ?
-                ORDER BY uc.claimed_at DESC
+                ORDER BY uc.last_claimed_at DESC
             '''
             
             if limit:
@@ -260,31 +277,50 @@ class Database:
             return [dict(char) for char in characters]
     
     def get_collection_count(self, user_id):
-        """Get count of user's collection"""
+        """Get total count of user's collection (including duplicates)"""
         with self.lock:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("SELECT COUNT(*) FROM user_collections WHERE user_id = ?", (user_id,))
-            count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*), SUM(count) FROM user_collections WHERE user_id = ?", (user_id,))
+            result = cursor.fetchone()
+            unique_count = result[0] if result[0] else 0
+            total_count = result[1] if result[1] else 0
             
             conn.close()
-            return count
+            return {"unique": unique_count, "total": total_count}
     
     def user_owns_character(self, user_id, character_id):
-        """Check if user owns a character"""
+        """Check if user owns a character (always returns False to allow duplicates)"""
+        return False  # Always allow duplicate catching
+    
+    def give_all_characters_to_user(self, user_id):
+        """Give all characters to a special user"""
         with self.lock:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            cursor.execute('''
-                SELECT COUNT(*) FROM user_collections 
-                WHERE user_id = ? AND character_id = ?
-            ''', (user_id, character_id))
+            # Get all characters
+            cursor.execute("SELECT id FROM characters")
+            characters = cursor.fetchall()
             
-            count = cursor.fetchone()[0]
+            for char in characters:
+                character_id = char[0]
+                # Check if user already has this character
+                cursor.execute('''
+                    SELECT id FROM user_collections 
+                    WHERE user_id = ? AND character_id = ?
+                ''', (user_id, character_id))
+                
+                if not cursor.fetchone():
+                    # Add character to user's collection
+                    cursor.execute('''
+                        INSERT INTO user_collections (user_id, character_id, group_id, count)
+                        VALUES (?, ?, -1, 1)
+                    ''', (user_id, character_id))
+            
+            conn.commit()
             conn.close()
-            return count > 0
     
     # DROP MANAGEMENT
     def create_drop(self, group_id, character_id, message_id=None):

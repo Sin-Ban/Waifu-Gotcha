@@ -50,3 +50,9 @@ TRADE_TIMEOUT = 300  # 5 minutes for trade to be accepted/declined
 # Character drop settings
 DROP_TIMEOUT = 60  # 60 seconds to catch a character
 CATCH_SIMILARITY_THRESHOLD = 0.8  # How similar the name needs to be
+
+# Special users who get all characters in their collection
+SPECIAL_USERS = [
+    # Add your user ID here (you can get it from @userinfobot on Telegram)
+    # Example: 123456789
+]
