@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMem
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatType
 from database import db
-from config import BOT_TOKEN, CATCH_TIMEOUT, VALID_GENDERS, TRADE_TIMEOUT, RARITY_LEVELS, VALID_RARITIES, DROP_TIMEOUT, SPECIAL_USERS
+from config import BOT_TOKEN, CATCH_TIMEOUT, VALID_GENDERS, TRADE_TIMEOUT, RARITY_LEVELS, VALID_RARITIES, DROP_TIMEOUT, SPECIAL_USERS, OWNER_USER_ID, BANNED_USERS
 
 # Enable logging
 logging.basicConfig(
@@ -15,6 +15,35 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# MIDDLEWARE
+async def check_banned_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Check if user is banned before processing any command"""
+    user_id = update.effective_user.id
+    
+    if db.is_banned(user_id):
+        await update.message.reply_text("❌ You are banned from using this bot!")
+        return False
+    
+    return True
+
+def owner_only(func):
+    """Decorator to restrict commands to owner only"""
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not OWNER_USER_ID:
+            await update.message.reply_text("❌ Owner not set in configuration!")
+            return
+        
+        if update.effective_user.id != OWNER_USER_ID:
+            await update.message.reply_text("❌ This command is owner-only!")
+            return
+            
+        # Check if user is banned
+        if not await check_banned_user(update, context):
+            return
+            
+        await func(update, context)
+    return wrapper
 
 # Global state for active drops
 active_drops = {}
@@ -92,6 +121,10 @@ async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: 
 # COMMAND HANDLERS
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
+    # Check if user is banned
+    if not await check_banned_user(update, context):
+        return
+    
     if update.effective_chat.type == ChatType.PRIVATE:
         await update.message.reply_text(
             "🌟 Welcome to Waifu/Husbando Collector Bot!\n\n"
@@ -169,7 +202,11 @@ async def giveme_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Give all characters to special users"""
     user_id = update.effective_user.id
     
-    if user_id not in SPECIAL_USERS:
+    # Check if user is banned
+    if not await check_banned_user(update, context):
+        return
+    
+    if not db.is_special_user(user_id):
         await update.message.reply_text("❌ You don't have permission to use this command!")
         return
     
@@ -180,8 +217,111 @@ async def giveme_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎉 All characters have been added to {update.effective_user.first_name}'s collection!"
     )
 
+@owner_only
+async def add_special_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Add a special user (owner only)"""
+    if not context.args:
+        await update.message.reply_text("Usage: /addspecial <user_id> [username]")
+        return
+    
+    try:
+        user_id = int(context.args[0])
+        username = context.args[1] if len(context.args) > 1 else None
+        
+        db.add_special_user(user_id, username)
+        await update.message.reply_text(f"✅ Added special user: {user_id} ({username or 'Unknown'})")
+    except ValueError:
+        await update.message.reply_text("❌ Invalid user ID!")
+
+@owner_only
+async def remove_special_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Remove a special user (owner only)"""
+    if not context.args:
+        await update.message.reply_text("Usage: /removespecial <user_id>")
+        return
+    
+    try:
+        user_id = int(context.args[0])
+        db.remove_special_user(user_id)
+        await update.message.reply_text(f"✅ Removed special user: {user_id}")
+    except ValueError:
+        await update.message.reply_text("❌ Invalid user ID!")
+
+@owner_only
+async def list_special_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """List all special users (owner only)"""
+    users = db.get_special_users()
+    
+    if not users:
+        await update.message.reply_text("📝 No special users found.")
+        return
+    
+    text = "👥 **Special Users:**\n\n"
+    for user in users:
+        text += f"🆔 {user['user_id']}"
+        if user['username']:
+            text += f" (@{user['username']})"
+        text += f"\n📅 Added: {user['added_at'][:10]}\n\n"
+    
+    await update.message.reply_text(text)
+
+@owner_only
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ban a user (owner only)"""
+    if not context.args:
+        await update.message.reply_text("Usage: /ban <user_id> [reason]")
+        return
+    
+    try:
+        user_id = int(context.args[0])
+        reason = ' '.join(context.args[1:]) if len(context.args) > 1 else "No reason provided"
+        
+        db.ban_user(user_id, None, reason)
+        await update.message.reply_text(f"🚫 Banned user: {user_id}\nReason: {reason}")
+    except ValueError:
+        await update.message.reply_text("❌ Invalid user ID!")
+
+@owner_only
+async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Unban a user (owner only)"""
+    if not context.args:
+        await update.message.reply_text("Usage: /unban <user_id>")
+        return
+    
+    try:
+        user_id = int(context.args[0])
+        db.unban_user(user_id)
+        await update.message.reply_text(f"✅ Unbanned user: {user_id}")
+    except ValueError:
+        await update.message.reply_text("❌ Invalid user ID!")
+
+@owner_only
+async def list_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """List all banned users (owner only)"""
+    users = db.get_banned_users()
+    
+    if not users:
+        await update.message.reply_text("📝 No banned users found.")
+        return
+    
+    text = "🚫 **Banned Users:**\n\n"
+    for user in users:
+        text += f"🆔 {user['user_id']}"
+        if user['username']:
+            text += f" (@{user['username']})"
+        text += f"\n📅 Banned: {user['banned_at'][:10]}"
+        if user['reason']:
+            text += f"\n💬 Reason: {user['reason']}"
+        text += "\n\n"
+    
+    await update.message.reply_text(text)
+
 async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /addchar command"""
+    # Check if user is banned
+    if not await check_banned_user(update, context):
+        return
+    
     # Check if this is a photo message with caption
     if update.message.photo and update.message.caption:
         # Parse caption as addchar command
@@ -267,6 +407,10 @@ async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def catch_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /catch command"""
+    # Check if user is banned
+    if not await check_banned_user(update, context):
+        return
+    
     if update.effective_chat.type == ChatType.PRIVATE:
         await update.message.reply_text("This command only works in groups!")
         return
@@ -301,6 +445,10 @@ async def catch_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def my_collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /mycollection command"""
+    # Check if user is banned
+    if not await check_banned_user(update, context):
+        return
+    
     user_id = update.effective_user.id
     page = 0
     
@@ -342,6 +490,10 @@ async def my_collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def search_characters(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /search command"""
+    # Check if user is banned
+    if not await check_banned_user(update, context):
+        return
+    
     if not context.args:
         await update.message.reply_text("Usage: /search <name or series>")
         return
@@ -369,6 +521,10 @@ async def search_characters(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def trade_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /trade command"""
+    # Check if user is banned
+    if not await check_banned_user(update, context):
+        return
+    
     if len(context.args) < 2:
         await update.message.reply_text(
             "Usage: /trade <character_id> @username\n"
@@ -645,6 +801,12 @@ async def setup_bot_commands(application):
         BotCommand("mycollection", "View your character collection"),
         BotCommand("search", "Search for characters by name or series"),
         BotCommand("trade", "Trade character with another user"),
+        BotCommand("addspecial", "[Owner] Add special user"),
+        BotCommand("removespecial", "[Owner] Remove special user"),
+        BotCommand("listspecial", "[Owner] List special users"),
+        BotCommand("ban", "[Owner] Ban a user"),
+        BotCommand("unban", "[Owner] Unban a user"),
+        BotCommand("listbanned", "[Owner] List banned users"),
     ]
     
     await application.bot.set_my_commands(commands)
@@ -669,6 +831,14 @@ def main():
     application.add_handler(CommandHandler("mycollection", my_collection))
     application.add_handler(CommandHandler("search", search_characters))
     application.add_handler(CommandHandler("trade", trade_character))
+    
+    # Owner-only management commands
+    application.add_handler(CommandHandler("addspecial", add_special_user))
+    application.add_handler(CommandHandler("removespecial", remove_special_user))
+    application.add_handler(CommandHandler("listspecial", list_special_users))
+    application.add_handler(CommandHandler("ban", ban_user))
+    application.add_handler(CommandHandler("unban", unban_user))
+    application.add_handler(CommandHandler("listbanned", list_banned_users))
     
     # Add message handler for group messages
     application.add_handler(MessageHandler(

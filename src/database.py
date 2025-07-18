@@ -89,6 +89,25 @@ class Database:
                 )
             ''')
             
+            # Special users table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS special_users (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Banned users table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS banned_users (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    reason TEXT,
+                    banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             conn.commit()
             conn.close()
     
@@ -321,6 +340,105 @@ class Database:
             
             conn.commit()
             conn.close()
+    
+    # USER MANAGEMENT
+    def add_special_user(self, user_id, username=None):
+        """Add a special user"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT OR REPLACE INTO special_users (user_id, username)
+                VALUES (?, ?)
+            ''', (user_id, username))
+            
+            conn.commit()
+            conn.close()
+    
+    def remove_special_user(self, user_id):
+        """Remove a special user"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("DELETE FROM special_users WHERE user_id = ?", (user_id,))
+            
+            conn.commit()
+            conn.close()
+    
+    def is_special_user(self, user_id):
+        """Check if user is special"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT user_id FROM special_users WHERE user_id = ?", (user_id,))
+            result = cursor.fetchone()
+            
+            conn.close()
+            return result is not None
+    
+    def get_special_users(self):
+        """Get all special users"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM special_users ORDER BY added_at DESC")
+            users = cursor.fetchall()
+            
+            conn.close()
+            return [dict(user) for user in users]
+    
+    def ban_user(self, user_id, username=None, reason=None):
+        """Ban a user"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT OR REPLACE INTO banned_users (user_id, username, reason)
+                VALUES (?, ?, ?)
+            ''', (user_id, username, reason))
+            
+            conn.commit()
+            conn.close()
+    
+    def unban_user(self, user_id):
+        """Unban a user"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("DELETE FROM banned_users WHERE user_id = ?", (user_id,))
+            
+            conn.commit()
+            conn.close()
+    
+    def is_banned(self, user_id):
+        """Check if user is banned"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT user_id FROM banned_users WHERE user_id = ?", (user_id,))
+            result = cursor.fetchone()
+            
+            conn.close()
+            return result is not None
+    
+    def get_banned_users(self):
+        """Get all banned users"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM banned_users ORDER BY banned_at DESC")
+            users = cursor.fetchall()
+            
+            conn.close()
+            return [dict(user) for user in users]
     
     # DROP MANAGEMENT
     def create_drop(self, group_id, character_id, message_id=None):

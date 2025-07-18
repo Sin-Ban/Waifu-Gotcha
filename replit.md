@@ -86,12 +86,20 @@ root/
 
 ## Recent Changes (July 2025)
 
+### Owner Management System (July 18, 2025)
+- **Owner-Only Commands**: Complete management system for special users and bans
+- **Special User System**: Database-driven special user management with `/addspecial`, `/removespecial`, `/listspecial`
+- **Ban System**: Comprehensive ban/unban functionality with `/ban`, `/unban`, `/listbanned`
+- **Automatic Ban Checking**: Middleware prevents banned users from using any bot features
+- **Database Integration**: Special users and banned users stored in SQLite with proper tracking
+
 ### Advanced Visual Collection System
 - **Image-Based Character Drops**: Characters now drop with images and hidden names (❓❓❓)
 - **Name-Based Catching**: Players catch characters by typing names with fuzzy matching (70% similarity)
 - **7-Tier Rarity System**: Complete rarity levels with colored emojis (⚪🟢🔵🟣🟡🔴⭐)
 - **Enhanced Image Upload**: Support for image uploads with captions for character addition
 - **Smart Caption Processing**: Bot handles both `/addchar` commands and direct captions
+- **Duplicate Character System**: Users can catch same character multiple times with count tracking
 
 ### Visual and UX Improvements
 - **Emoji Formatting**: Proper character display with 🍎 Name and 📚 Series emojis
@@ -99,6 +107,7 @@ root/
 - **Rarity Visualization**: Each rarity level has distinct colored emoji representation
 - **Image Integration**: Full support for character images in drops and database storage
 - **Automatic Bot Commands**: Complete command menu system in Telegram interface
+- **Enhanced Collection Display**: Shows unique characters, total catches, and individual character counts
 
 ### Previous Architecture (January 2025)
 - **Complete Database Restructure**: Migrated from gacha system to group-based collection

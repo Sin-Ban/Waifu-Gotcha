@@ -51,8 +51,16 @@ TRADE_TIMEOUT = 300  # 5 minutes for trade to be accepted/declined
 DROP_TIMEOUT = 60  # 60 seconds to catch a character
 CATCH_SIMILARITY_THRESHOLD = 0.8  # How similar the name needs to be
 
+# Owner user ID (can manage special users and ban/unban)
+OWNER_USER_ID = None  # Set this to your user ID from @userinfobot
+
 # Special users who get all characters in their collection
 SPECIAL_USERS = [
-    # Add your user ID here (you can get it from @userinfobot on Telegram)
+    # Add user IDs here (managed by owner commands)
     # Example: 123456789
+]
+
+# Banned users who cannot use the bot
+BANNED_USERS = [
+    # Banned user IDs (managed by owner commands)
 ]
