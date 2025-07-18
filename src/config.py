@@ -52,7 +52,7 @@ DROP_TIMEOUT = 60  # 60 seconds to catch a character
 CATCH_SIMILARITY_THRESHOLD = 0.8  # How similar the name needs to be
 
 # Owner user ID (can manage special users and ban/unban)
-OWNER_USER_ID = None  # Set this to your user ID from @userinfobot
+OWNER_USER_ID = 6200648859  # Your user ID
 
 # Special users who get all characters in their collection
 SPECIAL_USERS = [

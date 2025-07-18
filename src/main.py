@@ -125,6 +125,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_banned_user(update, context):
         return
     
+    # Ensure owner has all characters
+    await ensure_owner_has_all_characters(update.effective_user.id)
+    
     if update.effective_chat.type == ChatType.PRIVATE:
         await update.message.reply_text(
             "🌟 Welcome to Waifu/Husbando Collector Bot!\n\n"
@@ -199,23 +202,28 @@ async def set_waifu_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Waifu limit set to {limit} messages!")
 
 async def giveme_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Give all characters to special users"""
+    """Give all characters to special users or owner"""
     user_id = update.effective_user.id
     
     # Check if user is banned
     if not await check_banned_user(update, context):
         return
     
-    if not db.is_special_user(user_id):
+    # Allow owner to use this command
+    if user_id == OWNER_USER_ID or db.is_special_user(user_id):
+        # Give all characters to the user
+        db.give_all_characters_to_user(user_id)
+        
+        await update.message.reply_text(
+            f"🎉 All characters have been added to {update.effective_user.first_name}'s collection!"
+        )
+    else:
         await update.message.reply_text("❌ You don't have permission to use this command!")
-        return
-    
-    # Give all characters to the user
-    db.give_all_characters_to_user(user_id)
-    
-    await update.message.reply_text(
-        f"🎉 All characters have been added to {update.effective_user.first_name}'s collection!"
-    )
+
+async def ensure_owner_has_all_characters(user_id):
+    """Ensure owner has all characters in their collection"""
+    if user_id == OWNER_USER_ID:
+        db.give_all_characters_to_user(user_id)
 
 @owner_only
 async def add_special_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -450,6 +458,9 @@ async def my_collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     user_id = update.effective_user.id
+    
+    # Ensure owner has all characters
+    await ensure_owner_has_all_characters(user_id)
     page = 0
     
     # Get collection
