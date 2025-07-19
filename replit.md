@@ -112,6 +112,14 @@ root/
 - **Fixed Pagination**: Corrected page system calculation and navigation functionality
 - **Compact Layout**: Streamlined display with emojis and better information organization
 
+### Character Name Cleanup & Infinity Display (July 19, 2025)
+- **Bot Tag Removal**: Fixed character names by removing @YourWaifuGotchaBot tags automatically
+- **Clean Database**: Cleaned existing character names and invalid collection entries
+- **Infinity Symbol Feature**: Owner and special users see ♾️ instead of count numbers for duplicates
+- **Enhanced ID Display**: Added character ID numbers (🆔 XX) to collection display for easy reference
+- **Auto-Cleaning**: New characters automatically have bot tags removed during addition
+- **Database Integrity**: Fixed orphaned collection entries pointing to deleted characters
+
 ### Advanced Visual Collection System
 - **Image-Based Character Drops**: Characters now drop with images and hidden names (❓❓❓)
 - **Name-Based Catching**: Players catch characters by typing names with fuzzy matching (70% similarity)

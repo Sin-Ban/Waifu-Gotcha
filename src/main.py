@@ -27,6 +27,10 @@ async def check_banned_user(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     
     return True
 
+def is_owner(user_id):
+    """Check if user is the owner"""
+    return user_id == OWNER_USER_ID
+
 def owner_only(func):
     """Decorator to restrict commands to owner only"""
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
