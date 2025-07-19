@@ -509,9 +509,14 @@ async def my_collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     for i, char in enumerate(collection, 1):
         rarity_info = RARITY_LEVELS.get(char['rarity'], RARITY_LEVELS['Common'])
-        count_text = f" x{char['count']}" if char['count'] > 1 else ""
         
-        text += f"**{char['name']}**{count_text}\n"
+        # Show different count display for owner/special users vs normal users
+        if is_owner(user_id) or db.is_special_user(user_id):
+            count_text = " ♾️" if char['count'] > 1 else ""
+        else:
+            count_text = f" x{char['count']}" if char['count'] > 1 else ""
+        
+        text += f"🆔 {char['id']} - **{char['name']}**{count_text}\n"
         text += f"📺 {char['series_name']}\n"
         text += f"🎭 {char['gender'].title()} | {rarity_info['emoji']} {char['rarity']}\n\n"
     
@@ -799,9 +804,14 @@ async def handle_collection_page(query, context):
     
     for i, char in enumerate(collection, 1):
         rarity_info = RARITY_LEVELS.get(char['rarity'], RARITY_LEVELS['Common'])
-        count_text = f" x{char['count']}" if char['count'] > 1 else ""
         
-        text += f"**{char['name']}**{count_text}\n"
+        # Show different count display for owner/special users vs normal users
+        if is_owner(user_id) or db.is_special_user(user_id):
+            count_text = " ♾️" if char['count'] > 1 else ""
+        else:
+            count_text = f" x{char['count']}" if char['count'] > 1 else ""
+        
+        text += f"🆔 {char['id']} - **{char['name']}**{count_text}\n"
         text += f"📺 {char['series_name']}\n"
         text += f"🎭 {char['gender'].title()} | {rarity_info['emoji']} {char['rarity']}\n\n"
     

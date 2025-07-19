@@ -183,6 +183,9 @@ class Database:
     # CHARACTER MANAGEMENT
     def add_character(self, name, series_name, image_url, gender, added_by, rarity="Common"):
         """Add a new character to the database"""
+        # Clean name by removing bot tags
+        clean_name = self._clean_character_name(name)
+        
         with self.lock:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -190,12 +193,21 @@ class Database:
             cursor.execute('''
                 INSERT INTO characters (name, series_name, image_url, gender, added_by, rarity)
                 VALUES (?, ?, ?, ?, ?, ?)
-            ''', (name, series_name, image_url, gender, added_by, rarity))
+            ''', (clean_name, series_name, image_url, gender, added_by, rarity))
             
             character_id = cursor.lastrowid
             conn.commit()
             conn.close()
             return character_id
+    
+    def _clean_character_name(self, name):
+        """Clean character name by removing bot tags and unwanted text"""
+        import re
+        # Remove bot mentions like @YourWaifuGotchaBot
+        clean_name = re.sub(r'@\w+', '', name)
+        # Remove extra spaces and clean up
+        clean_name = ' '.join(clean_name.split())
+        return clean_name.strip()
     
     def get_character_by_id(self, character_id):
         """Get character information by ID"""
