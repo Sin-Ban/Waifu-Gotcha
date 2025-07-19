@@ -119,11 +119,18 @@ def create_trade_keyboard(trade_id):
 
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> bool:
     """Check if user is admin in the group"""
+    # Owner always has admin privileges
+    if user_id == OWNER_USER_ID:
+        return True
+    
     try:
         chat_member = await context.bot.get_chat_member(update.effective_chat.id, user_id)
+        logger.info(f"User {user_id} status: {chat_member.status}")
         return chat_member.status in [ChatMember.ADMINISTRATOR, ChatMember.OWNER]
-    except Exception:
-        return False
+    except Exception as e:
+        logger.error(f"Failed to check admin status for user {user_id}: {e}")
+        # If we can't check admin status, allow owner and special users
+        return user_id == OWNER_USER_ID or db.is_special_user(user_id)
 
 # COMMAND HANDLERS
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):

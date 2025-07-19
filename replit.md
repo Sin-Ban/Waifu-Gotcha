@@ -120,6 +120,14 @@ root/
 - **Auto-Cleaning**: New characters automatically have bot tags removed during addition
 - **Database Integrity**: Fixed orphaned collection entries pointing to deleted characters
 
+### Admin Check & Error Handling Fixes (July 19, 2025)
+- **Owner Admin Bypass**: Owner always gets admin privileges regardless of Telegram group status
+- **Improved Admin Check**: Added fallback for special users when API calls fail
+- **Callback Error Handling**: Fixed "Query too old" errors with graceful error handling
+- **Database Method Fix**: Corrected get_group_info to get_group method call
+- **Enhanced Logging**: Added detailed logging for admin status checks and errors
+- **Balanced Character Database**: Added 4 waifu characters to balance existing 4 husbandos
+
 ### Advanced Visual Collection System
 - **Image-Based Character Drops**: Characters now drop with images and hidden names (❓❓❓)
 - **Name-Based Catching**: Players catch characters by typing names with fuzzy matching (70% similarity)
