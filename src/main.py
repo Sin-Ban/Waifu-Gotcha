@@ -325,9 +325,15 @@ async def list_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /addchar command"""
+    """Handle /addchar command (owner and special users only)"""
     # Check if user is banned
     if not await check_banned_user(update, context):
+        return
+    
+    # Check if user is owner or special user
+    user_id = update.effective_user.id
+    if not (is_owner(user_id) or db.is_special_user(user_id)):
+        await update.message.reply_text("❌ Only owner and special users can add characters!")
         return
     
     # Check if this is a photo message with caption
@@ -754,7 +760,7 @@ async def handle_collection_page(query, context):
     
     # Get collection
     collection = db.get_user_collection(user_id, limit=5, offset=page * 5)
-    total_count = db.get_collection_count(user_id)
+    count_info = db.get_collection_count(user_id)
     
     if not collection:
         await query.edit_message_text("📝 Your collection is empty!")
@@ -762,14 +768,15 @@ async def handle_collection_page(query, context):
     
     # Format collection
     text = f"📚 **{query.from_user.first_name}'s Collection**\n\n"
-    text += f"Total characters: {total_count}\n\n"
+    text += f"Unique characters: {count_info['unique']} | Total catches: {count_info['total']}\n\n"
     
     for char in collection:
-        text += f"🆔 {char['id']} - {char['name']}\n"
+        count_text = f" x{char['count']}" if char['count'] > 1 else ""
+        text += f"🆔 {char['id']} - {char['name']}{count_text}\n"
         text += f"📺 {char['series_name']}\n"
         text += f"🎭 {char['gender'].title()}\n\n"
     
-    total_pages = (total_count + 4) // 5
+    total_pages = (count_info['unique'] + 4) // 5
     text += f"📄 Page {page + 1}/{total_pages}"
     
     keyboard = create_collection_keyboard(page, total_pages)

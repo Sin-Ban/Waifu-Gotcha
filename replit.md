@@ -93,6 +93,12 @@ root/
 - **Automatic Ban Checking**: Middleware prevents banned users from using any bot features
 - **Database Integration**: Special users and banned users stored in SQLite with proper tracking
 
+### Character Addition Restrictions (July 19, 2025)
+- **Permission System**: Only owner and special users can add characters using `/addchar`
+- **Database Schema Fix**: Fixed user_collections table missing 'count' column that was breaking /mycollection
+- **Character Drops Fix**: All characters (system + user-added) now available for drops
+- **Collection System**: Fixed duplicate character counting and collection display functionality
+
 ### Advanced Visual Collection System
 - **Image-Based Character Drops**: Characters now drop with images and hidden names (❓❓❓)
 - **Name-Based Catching**: Players catch characters by typing names with fuzzy matching (70% similarity)
