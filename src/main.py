@@ -733,13 +733,13 @@ async def drop_character(update: Update, context: ContextTypes.DEFAULT_TYPE, gro
     # Get rarity info
     rarity_info = RARITY_LEVELS.get(character['rarity'], RARITY_LEVELS['Common'])
     
-    # Send character drop message
+    # Send character drop message  
     text = f"🎉 A wild {group['mode']} appeared!\n\n"
     text += f"📛 Name: ❓❓❓\n"
     text += f"📺 Series: {character['series_name']}\n"
-    text += f"🎭 Type: {character['gender'].title()}\n"
-    text += f"✨ Rarity: {rarity_info['emoji']} {character['rarity']}\n\n"
+    text += f"🎭 Type: {character['gender'].title()}\n\n"
     text += f"🔍 Type the character's name to catch them!\n"
+    text += f"💫 **Catch** them before they run away!\n"
     text += f"⏰ {DROP_TIMEOUT} seconds to catch!"
     
     if character['image_url']:
