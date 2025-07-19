@@ -65,12 +65,15 @@ def create_collection_keyboard(page=0, total_pages=1):
     # Navigation buttons
     nav_buttons = []
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton("◀️ Prev", callback_data=f"collection_page_{page-1}"))
+        nav_buttons.append(InlineKeyboardButton("◀️ Previous", callback_data=f"collection_page_{page-1}"))
     if page < total_pages - 1:
         nav_buttons.append(InlineKeyboardButton("Next ▶️", callback_data=f"collection_page_{page+1}"))
     
     if nav_buttons:
         keyboard.append(nav_buttons)
+    
+    # Close button
+    keyboard.append([InlineKeyboardButton("❌ Close", callback_data="collection_close")])
     
     return InlineKeyboardMarkup(keyboard)
 
@@ -501,17 +504,16 @@ async def my_collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Format collection
-    text = f"📚 **{update.effective_user.first_name}'s Harem**\n\n"
-    text += f"👥 Unique characters: {count_info['unique']}\n"
-    text += f"🎯 Total catches: {count_info['total']}\n\n"
+    text = f"📚 **{update.effective_user.first_name}'s Collection**\n\n"
+    text += f"👥 Unique: {count_info['unique']} | 🎯 Total: {count_info['total']}\n\n"
     
-    for char in collection:
+    for i, char in enumerate(collection, 1):
         rarity_info = RARITY_LEVELS.get(char['rarity'], RARITY_LEVELS['Common'])
-        text += f"🆔 {char['id']} - {char['name']}\n"
-        text += f"📚 {char['series_name']}\n"
-        text += f"🎭 {char['gender'].title()}\n"
-        text += f"✨ {rarity_info['emoji']} {char['rarity']}\n"
-        text += f"🔢 Count: {char['count']}\n\n"
+        count_text = f" x{char['count']}" if char['count'] > 1 else ""
+        
+        text += f"**{char['name']}**{count_text}\n"
+        text += f"📺 {char['series_name']}\n"
+        text += f"🎭 {char['gender'].title()} | {rarity_info['emoji']} {char['rarity']}\n\n"
     
     total_pages = (count_info['unique'] + 4) // 5
     text += f"📄 Page {page + 1}/{total_pages}"
@@ -761,6 +763,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_trade_accept(query, context)
     elif data.startswith("trade_decline_"):
         await handle_trade_decline(query, context)
+    elif data == "collection_close":
+        await handle_collection_close(query, context)
 
 async def handle_mode_change(query, context):
     """Handle mode change button"""
@@ -791,13 +795,15 @@ async def handle_collection_page(query, context):
     
     # Format collection
     text = f"📚 **{query.from_user.first_name}'s Collection**\n\n"
-    text += f"Unique characters: {count_info['unique']} | Total catches: {count_info['total']}\n\n"
+    text += f"👥 Unique: {count_info['unique']} | 🎯 Total: {count_info['total']}\n\n"
     
-    for char in collection:
+    for i, char in enumerate(collection, 1):
+        rarity_info = RARITY_LEVELS.get(char['rarity'], RARITY_LEVELS['Common'])
         count_text = f" x{char['count']}" if char['count'] > 1 else ""
-        text += f"🆔 {char['id']} - {char['name']}{count_text}\n"
+        
+        text += f"**{char['name']}**{count_text}\n"
         text += f"📺 {char['series_name']}\n"
-        text += f"🎭 {char['gender'].title()}\n\n"
+        text += f"🎭 {char['gender'].title()} | {rarity_info['emoji']} {char['rarity']}\n\n"
     
     total_pages = (count_info['unique'] + 4) // 5
     text += f"📄 Page {page + 1}/{total_pages}"
@@ -843,6 +849,10 @@ async def handle_trade_accept(query, context):
 async def handle_trade_decline(query, context):
     """Handle trade decline"""
     await query.edit_message_text("❌ Trade declined!")
+
+async def handle_collection_close(query, context):
+    """Handle collection close button"""
+    await query.edit_message_text("Collection closed.")
 
 async def setup_bot_commands(application):
     """Set up bot commands menu"""

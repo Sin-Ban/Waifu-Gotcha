@@ -105,6 +105,13 @@ root/
 - **Database Statistics Command**: Added `/dbstats` owner command to check character counts and user statistics
 - **Complete Flexibility**: Bot now starts with empty character database, all content is user-generated
 
+### Collection Display Improvements (July 19, 2025)
+- **Clean Character Display**: Removed bot tag numbers (ID: 21, 22, etc.) for cleaner appearance
+- **Enhanced Formatting**: Character names displayed prominently with attractive layout
+- **Improved Navigation**: Added Previous, Next, and Close buttons for better user experience
+- **Fixed Pagination**: Corrected page system calculation and navigation functionality
+- **Compact Layout**: Streamlined display with emojis and better information organization
+
 ### Advanced Visual Collection System
 - **Image-Based Character Drops**: Characters now drop with images and hidden names (❓❓❓)
 - **Name-Based Catching**: Players catch characters by typing names with fuzzy matching (70% similarity)
