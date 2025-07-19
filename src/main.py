@@ -577,9 +577,17 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
     if update.effective_chat.type == ChatType.PRIVATE:
         return
     
+    # Check if message exists and has text
+    if not update.message or not update.message.text:
+        return
+    
     group_id = update.effective_chat.id
     user_id = update.effective_user.id
     message_text = update.message.text.strip()
+    
+    # Don't count commands towards message limit
+    if message_text.startswith('/'):
+        return
     
     # Register group if not exists
     group = db.get_group(group_id)
@@ -631,7 +639,13 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
     
     # Check if we should drop a character
     if group['message_count'] >= group['waifu_limit']:
-        await drop_character(update, context, group)
+        # Check if any characters exist before attempting drop
+        character = db.get_random_character(group['mode'])
+        if character:
+            await drop_character(update, context, group)
+        else:
+            # Reset counter and don't attempt drop if no characters
+            db.reset_message_count(group_id)
 
 async def drop_character(update: Update, context: ContextTypes.DEFAULT_TYPE, group):
     """Drop a character in the group"""
@@ -641,11 +655,11 @@ async def drop_character(update: Update, context: ContextTypes.DEFAULT_TYPE, gro
     character = db.get_random_character(group['mode'])
     if not character:
         # No user-added characters of this type available
-        await context.bot.send_message(
-            chat_id=group_id,
-            text=f"❌ No {group['mode']} characters have been added to the database yet!\n"
-                 f"Use `/addchar` or send an image with character details to add some characters first."
-        )
+        # Reset message count to prevent spam
+        db.reset_message_count(group_id)
+        
+        # Don't send message to prevent spam - just return silently
+        print(f"No {group['mode']} characters available in database")
         return
     
     # Create drop
