@@ -167,19 +167,34 @@ async def set_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Only admins can change the group mode!")
         return
     
+    # If no arguments, show current mode with inline keyboard
     if not context.args:
-        await update.message.reply_text("Usage: /setmode <waifu/husbando>")
+        group_info = db.get_group_info(update.effective_chat.id)
+        current_mode = group_info['mode'] if group_info else 'Not set'
+        
+        await update.message.reply_text(
+            f"🎯 Current mode: **{current_mode.title()}**\n\n"
+            f"Choose a new mode:",
+            reply_markup=create_mode_keyboard(),
+            parse_mode='Markdown'
+        )
         return
     
     mode = context.args[0].lower()
     if mode not in VALID_GENDERS:
-        await update.message.reply_text("Mode must be 'waifu' or 'husbando'")
+        await update.message.reply_text(
+            "Mode must be 'waifu' or 'husbando'\n\n"
+            "Or use /setmode without arguments to see options.",
+            reply_markup=create_mode_keyboard()
+        )
         return
     
     db.set_group_mode(update.effective_chat.id, mode)
     await update.message.reply_text(
-        f"✅ Group mode set to {mode.title()}!",
-        reply_markup=create_mode_keyboard()
+        f"✅ Group mode set to **{mode.title()}**!\n\n"
+        f"Characters will now drop based on this mode.",
+        reply_markup=create_mode_keyboard(),
+        parse_mode='Markdown'
     )
 
 async def set_waifu_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
