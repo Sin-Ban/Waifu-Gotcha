@@ -48,7 +48,7 @@ VALID_RARITIES = list(RARITY_LEVELS.keys())
 TRADE_TIMEOUT = 300  # 5 minutes for trade to be accepted/declined
 
 # Character drop settings
-DROP_TIMEOUT = 60  # 60 seconds to catch a character
+DROP_TIMEOUT = 180  # 180 seconds (3 minutes) to catch a character
 CATCH_SIMILARITY_THRESHOLD = 0.8  # How similar the name needs to be
 
 # Owner user ID (can manage special users and ban/unban)
