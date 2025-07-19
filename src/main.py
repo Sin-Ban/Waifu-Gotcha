@@ -324,6 +324,29 @@ async def list_banned_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(text)
 
+@owner_only
+async def check_database_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Check database character statistics (owner only)"""
+    # Get character counts
+    total_chars = db.get_total_character_count()
+    waifus = db.get_character_count_by_gender('waifu')
+    husbandos = db.get_character_count_by_gender('husbando')
+    
+    # Get user stats
+    total_users = db.get_total_user_count()
+    collections = db.get_total_collection_count()
+    
+    text = f"📊 **Database Statistics**\n\n"
+    text += f"👥 **Characters:**\n"
+    text += f"📈 Total: {total_chars}\n"
+    text += f"💖 Waifus: {waifus}\n"
+    text += f"💙 Husbandos: {husbandos}\n\n"
+    text += f"👤 **Users:**\n"
+    text += f"📈 Total users with collections: {total_users}\n"
+    text += f"🎯 Total character claims: {collections}\n"
+    
+    await update.message.reply_text(text)
+
 async def add_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /addchar command (owner and special users only)"""
     # Check if user is banned
@@ -839,6 +862,7 @@ async def setup_bot_commands(application):
         BotCommand("ban", "[Owner] Ban a user"),
         BotCommand("unban", "[Owner] Unban a user"),
         BotCommand("listbanned", "[Owner] List banned users"),
+        BotCommand("dbstats", "[Owner] Check database statistics"),
     ]
     
     await application.bot.set_my_commands(commands)
@@ -871,6 +895,7 @@ def main():
     application.add_handler(CommandHandler("ban", ban_user))
     application.add_handler(CommandHandler("unban", unban_user))
     application.add_handler(CommandHandler("listbanned", list_banned_users))
+    application.add_handler(CommandHandler("dbstats", check_database_stats))
     
     # Add message handler for group messages
     application.add_handler(MessageHandler(

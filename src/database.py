@@ -484,6 +484,55 @@ class Database:
             conn.commit()
             conn.close()
     
+    # DATABASE STATISTICS
+    def get_total_character_count(self):
+        """Get total number of characters in database"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT COUNT(*) FROM characters")
+            result = cursor.fetchone()
+            
+            conn.close()
+            return result[0] if result else 0
+    
+    def get_character_count_by_gender(self, gender):
+        """Get character count by gender"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT COUNT(*) FROM characters WHERE gender = ?", (gender,))
+            result = cursor.fetchone()
+            
+            conn.close()
+            return result[0] if result else 0
+    
+    def get_total_user_count(self):
+        """Get total number of users with collections"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT COUNT(DISTINCT user_id) FROM user_collections")
+            result = cursor.fetchone()
+            
+            conn.close()
+            return result[0] if result else 0
+    
+    def get_total_collection_count(self):
+        """Get total number of character claims"""
+        with self.lock:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT SUM(count) FROM user_collections")
+            result = cursor.fetchone()
+            
+            conn.close()
+            return result[0] if result and result[0] else 0
+    
     # TRADING MANAGEMENT
     def create_trade(self, from_user_id, to_user_id, character_id, group_id):
         """Create a trade offer"""

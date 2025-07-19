@@ -99,6 +99,12 @@ root/
 - **Character Drops Fix**: All characters (system + user-added) now available for drops
 - **Collection System**: Fixed duplicate character counting and collection display functionality
 
+### Database Cleanup & Management (July 19, 2025)
+- **Pre-loaded Characters Removed**: Cleaned database of all 20 pre-loaded characters for fresh start
+- **User-Only Content**: Database now contains only user-added characters (4 husbandos remaining)
+- **Database Statistics Command**: Added `/dbstats` owner command to check character counts and user statistics
+- **Complete Flexibility**: Bot now starts with empty character database, all content is user-generated
+
 ### Advanced Visual Collection System
 - **Image-Based Character Drops**: Characters now drop with images and hidden names (❓❓❓)
 - **Name-Based Catching**: Players catch characters by typing names with fuzzy matching (70% similarity)
