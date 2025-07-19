@@ -805,7 +805,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_mode_change(query, context):
     """Handle mode change button"""
-    if not await is_admin(query, context, query.from_user.id):
+    # Create a mock update object for admin check
+    class MockUpdate:
+        def __init__(self, chat_id):
+            self.effective_chat = type('obj', (object,), {'id': chat_id})
+    
+    mock_update = MockUpdate(query.message.chat.id)
+    
+    if not await is_admin(mock_update, context, query.from_user.id):
         await query.edit_message_text("❌ Only admins can change the group mode!")
         return
     
@@ -813,8 +820,10 @@ async def handle_mode_change(query, context):
     db.set_group_mode(query.message.chat.id, mode)
     
     await query.edit_message_text(
-        f"✅ Group mode changed to {mode.title()}!",
-        reply_markup=create_mode_keyboard()
+        f"✅ Group mode changed to **{mode.title()}**!\n\n"
+        f"Characters will now drop based on this mode.",
+        reply_markup=create_mode_keyboard(),
+        parse_mode='Markdown'
     )
 
 async def handle_collection_page(query, context):
