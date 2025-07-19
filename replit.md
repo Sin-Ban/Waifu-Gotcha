@@ -152,6 +152,29 @@ root/
 - **Automatic Bot Commands**: Complete command menu system in Telegram interface
 - **Enhanced Collection Display**: Shows unique characters, total catches, and individual character counts
 
+### Drop Message Format Refinements (July 19, 2025)
+- **Extended Timeout**: Increased character catch timeout from 60 seconds to 180 seconds (3 minutes)
+- **Rarity Hidden**: Removed rarity display from drop messages for cleaner mystery gameplay
+- **Enhanced Call-to-Action**: Added "💫 **Catch** them before they run away!" for better engagement
+- **Unified Experience**: Same clean format applied to both waifu and husbando modes
+- **Image Support**: Characters drop with images when available, graceful text fallback
+
+### Advanced Visual Collection System
+- **Image-Based Character Drops**: Characters now drop with images and hidden names (❓❓❓)
+- **Name-Based Catching**: Players catch characters by typing names with fuzzy matching (70% similarity)
+- **7-Tier Rarity System**: Complete rarity levels with colored emojis (⚪🟢🔵🟣🟡🔴⭐)
+- **Enhanced Image Upload**: Support for image uploads with captions for character addition
+- **Smart Caption Processing**: Bot handles both `/addchar` commands and direct captions
+- **Duplicate Character System**: Users can catch same character multiple times with count tracking
+
+### Visual and UX Improvements
+- **Emoji Formatting**: Proper character display with 🍎 Name and 📚 Series emojis
+- **Mystery Gameplay**: Characters drop with hidden names creating guessing mechanics
+- **Rarity Visualization**: Each rarity level has distinct colored emoji representation
+- **Image Integration**: Full support for character images in drops and database storage
+- **Automatic Bot Commands**: Complete command menu system in Telegram interface
+- **Enhanced Collection Display**: Shows unique characters, total catches, and individual character counts
+
 ### Previous Architecture (January 2025)
 - **Complete Database Restructure**: Migrated from gacha system to group-based collection
 - **New Collection Mechanics**: Implemented message-based character drops
