@@ -739,7 +739,7 @@ async def drop_character(update: Update, context: ContextTypes.DEFAULT_TYPE, gro
     text += f"📺 Series: {character['series_name']}\n"
     text += f"🎭 Type: {character['gender'].title()}\n\n"
     text += f"🔍 Type the character's name to catch them!\n"
-    text += f"💫 **Catch** them before they run away!\n"
+    text += f"💫 *Catch* them before they run away!\n"
     text += f"⏰ {DROP_TIMEOUT} seconds to catch!"
     
     if character['image_url']:
