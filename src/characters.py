@@ -149,8 +149,8 @@ SAMPLE_CHARACTERS = [
 
 def populate_characters():
     """Initialize character database (no longer auto-populates sample characters)"""
-    print("🎭 Character database initialized - ready for user-added characters!")
-    print("📊 Only characters added by users will appear in drops")
+    print("🎭 Character database initialized - ready for character drops!")
+    print("📊 All characters (user-added and system) available for drops")
 
 if __name__ == "__main__":
     populate_characters()
