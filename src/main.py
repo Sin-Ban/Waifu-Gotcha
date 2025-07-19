@@ -905,6 +905,28 @@ async def handle_collection_close(query, context):
     """Handle collection close button"""
     await query.edit_message_text("Collection closed.")
 
+@owner_only
+async def force_drop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Force a character drop for testing - Owner only"""
+    # Check if user is banned
+    if not await check_banned_user(update, context):
+        return
+    
+    if update.effective_chat.type == ChatType.PRIVATE:
+        await update.message.reply_text("This command only works in groups!")
+        return
+    
+    group_id = update.effective_chat.id
+    group = db.get_group(group_id)
+    
+    if not group:
+        await update.message.reply_text("Group not registered!")
+        return
+    
+    # Force drop a character
+    await drop_character(update, context, group)
+    await update.message.reply_text("🎯 Forced character drop triggered!")
+
 async def setup_bot_commands(application):
     """Set up bot commands menu"""
     commands = [
@@ -957,6 +979,7 @@ def main():
     application.add_handler(CommandHandler("unban", unban_user))
     application.add_handler(CommandHandler("listbanned", list_banned_users))
     application.add_handler(CommandHandler("dbstats", check_database_stats))
+    application.add_handler(CommandHandler("forcedrop", force_drop))
     
     # Add message handler for group messages
     application.add_handler(MessageHandler(
