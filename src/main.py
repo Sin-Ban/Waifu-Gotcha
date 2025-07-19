@@ -169,7 +169,7 @@ async def set_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # If no arguments, show current mode with inline keyboard
     if not context.args:
-        group_info = db.get_group_info(update.effective_chat.id)
+        group_info = db.get_group(update.effective_chat.id)
         current_mode = group_info['mode'] if group_info else 'Not set'
         
         await update.message.reply_text(
@@ -771,7 +771,13 @@ async def drop_timeout(group_id: int, timeout: int):
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle button callbacks"""
     query = update.callback_query
-    await query.answer()
+    
+    # Handle old callback queries gracefully
+    try:
+        await query.answer()
+    except Exception as e:
+        logger.warning(f"Failed to answer callback query: {e}")
+        return
     
     data = query.data
     
